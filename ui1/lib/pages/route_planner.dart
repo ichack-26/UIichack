@@ -372,6 +372,26 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                       ),
                     ),
                   ),
+                // Fullscreen map button
+                Positioned(
+                  bottom: 16,
+                  right: 16,
+                  child: FloatingActionButton(
+                    heroTag: 'fullscreenMapBtn',
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => FullscreenMapPage(
+                            markers: _markers,
+                            userLocation: _userLocation,
+                          ),
+                        ),
+                      );
+                    },
+                    backgroundColor: Colors.blue,
+                    child: const Icon(Icons.fullscreen),
+                  ),
+                ),
               ],
             ),
           ),
@@ -708,6 +728,62 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
     _debounce?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+}
+
+/// Full-screen map page
+class FullscreenMapPage extends StatefulWidget {
+  final List<Marker> markers;
+  final LatLng userLocation;
+
+  const FullscreenMapPage({
+    required this.markers,
+    required this.userLocation,
+  });
+
+  @override
+  State<FullscreenMapPage> createState() => _FullscreenMapPageState();
+}
+
+class _FullscreenMapPageState extends State<FullscreenMapPage> {
+  late MapController _fullscreenMapController;
+
+  @override
+  void initState() {
+    super.initState();
+    _fullscreenMapController = MapController();
+    // Center the map at the user's location
+    Future.delayed(const Duration(milliseconds: 500), () {
+      _fullscreenMapController.move(widget.userLocation, 14);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Map'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+      ),
+      body: FlutterMap(
+        mapController: _fullscreenMapController,
+        options: MapOptions(
+          initialCenter: widget.userLocation,
+          initialZoom: 14,
+        ),
+        children: [
+          TileLayer(
+            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            userAgentPackageName: 'com.example.ui1',
+            maxNativeZoom: 19,
+            maxZoom: 19,
+          ),
+          MarkerLayer(
+            markers: widget.markers,
+          ),
+        ],
+      ),
+    );
   }
 }
 

@@ -16,7 +16,7 @@ class RoutePlannerRoute extends StatefulWidget {
 class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
   final MapController _mapController = MapController();
   final TextEditingController _searchController = TextEditingController();
-  DateTime? _selectedDate;
+  late DateTime _selectedDate;
   LatLng? _fromLocation;
   LatLng? _toLocation;
   String _fromAddress = '';
@@ -46,6 +46,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
   @override
   void initState() {
     super.initState();
+    _selectedDate = DateTime.now();
     _getUserLocation();
   }
 
@@ -184,7 +185,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                   onTap: () async {
                     final date = await showDatePicker(
                       context: context,
-                      initialDate: _selectedDate ?? DateTime.now(),
+                      initialDate: _selectedDate,
                       firstDate: DateTime.now(),
                       lastDate: DateTime(2101),
                     );
@@ -218,12 +219,10 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            _selectedDate == null
-                                ? 'Select Departure Time'
-                                : '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year} ${_selectedDate!.hour}:${_selectedDate!.minute.toString().padLeft(2, '0')}',
-                            style: TextStyle(
+                            '${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year} ${_selectedDate.hour}:${_selectedDate.minute.toString().padLeft(2, '0')}',
+                            style: const TextStyle(
                               fontSize: 16,
-                              color: _selectedDate == null ? Colors.grey : Colors.black,
+                              color: Colors.black,
                             ),
                           ),
                         ),
@@ -288,7 +287,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                 const SizedBox(height: 8),
                 // Go Button
                 ElevatedButton(
-                  onPressed: (_fromLocation != null && _toLocation != null && _selectedDate != null)
+                  onPressed: (_fromLocation != null && _toLocation != null)
                       ? _planRoute
                       : null,
                   style: ElevatedButton.styleFrom(
@@ -438,7 +437,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
   }
 
   void _planRoute() {
-    if (_fromLocation == null || _toLocation == null || _selectedDate == null) return;
+    if (_fromLocation == null || _toLocation == null) return;
 
     // Generate mock routes
     _routes = _generateMockRoutes();

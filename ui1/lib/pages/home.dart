@@ -79,6 +79,17 @@ class _HomePageRouteState extends State<HomePageRoute> {
     }
   }
 
+  Future<void> _deleteJourney(Journey journey) async {
+    final prefs = await SharedPreferences.getInstance();
+    final updatedJourneys = _allJourneys.where((j) => j.id != journey.id).toList();
+    final updatedJson = updatedJourneys.map((j) => jsonEncode(j.toJson())).toList();
+    await prefs.setStringList('journeys', updatedJson);
+    if (!mounted) return;
+    setState(() {
+      _allJourneys = updatedJourneys;
+    });
+  }
+
   bool _looksLikeCoordinates(String value) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) return false;
@@ -370,20 +381,34 @@ class _HomePageRouteState extends State<HomePageRoute> {
                     const SizedBox(height: 16),
                     ...ongoing.map((j) => Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
-                      child: TravelRouteSummaryWidget(
-                        travelDate: j.date,
-                        fromLocation: _locationNameCache['${j.id}_from'] ?? j.from,
-                        toLocation: _locationNameCache['${j.id}_to'] ?? j.to,
-                        isUpcoming: false,
-                        isOngoing: true,
-                        imageUrl: j.imageUrl,
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => JourneyDetailsPage(journey: j),
-                            ),
-                          );
-                        },
+                      child: Dismissible(
+                        key: ValueKey('journey_${j.id}'),
+                        direction: DismissDirection.startToEnd,
+                        background: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade400,
+                            borderRadius: BorderRadius.circular(16.0),
+                          ),
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                          child: const Icon(Icons.delete, color: Colors.white),
+                        ),
+                        onDismissed: (_) => _deleteJourney(j),
+                        child: TravelRouteSummaryWidget(
+                          travelDate: j.date,
+                          fromLocation: _locationNameCache['${j.id}_from'] ?? j.from,
+                          toLocation: _locationNameCache['${j.id}_to'] ?? j.to,
+                          isUpcoming: false,
+                          isOngoing: true,
+                          imageUrl: j.imageUrl,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => JourneyDetailsPage(journey: j),
+                              ),
+                            );
+                          },
+                        ),
                       ),
                     )),
                     const SizedBox(height: 32),
@@ -425,19 +450,33 @@ class _HomePageRouteState extends State<HomePageRoute> {
                     ),
                   ...upcoming.map((j) => Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
-                    child: TravelRouteSummaryWidget(
-                      travelDate: j.date,
-                      fromLocation: _locationNameCache['${j.id}_from'] ?? j.from,
-                      toLocation: _locationNameCache['${j.id}_to'] ?? j.to,
-                      isUpcoming: true,
-                      imageUrl: j.imageUrl,
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => JourneyDetailsPage(journey: j),
-                          ),
-                        );
-                      },
+                    child: Dismissible(
+                      key: ValueKey('journey_${j.id}'),
+                      direction: DismissDirection.startToEnd,
+                      background: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade400,
+                          borderRadius: BorderRadius.circular(16.0),
+                        ),
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                        child: const Icon(Icons.delete, color: Colors.white),
+                      ),
+                      onDismissed: (_) => _deleteJourney(j),
+                      child: TravelRouteSummaryWidget(
+                        travelDate: j.date,
+                        fromLocation: _locationNameCache['${j.id}_from'] ?? j.from,
+                        toLocation: _locationNameCache['${j.id}_to'] ?? j.to,
+                        isUpcoming: true,
+                        imageUrl: j.imageUrl,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => JourneyDetailsPage(journey: j),
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   )),
 
@@ -479,19 +518,33 @@ class _HomePageRouteState extends State<HomePageRoute> {
                     ),
                   ...history.map((j) => Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
-                    child: TravelRouteSummaryWidget(
-                      travelDate: j.date,
-                      fromLocation: _locationNameCache['${j.id}_from'] ?? j.from,
-                      toLocation: _locationNameCache['${j.id}_to'] ?? j.to,
-                      isUpcoming: false,
-                      imageUrl: j.imageUrl,
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => JourneyDetailsPage(journey: j),
-                          ),
-                        );
-                      },
+                    child: Dismissible(
+                      key: ValueKey('journey_${j.id}'),
+                      direction: DismissDirection.startToEnd,
+                      background: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade400,
+                          borderRadius: BorderRadius.circular(16.0),
+                        ),
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                        child: const Icon(Icons.delete, color: Colors.white),
+                      ),
+                      onDismissed: (_) => _deleteJourney(j),
+                      child: TravelRouteSummaryWidget(
+                        travelDate: j.date,
+                        fromLocation: _locationNameCache['${j.id}_from'] ?? j.from,
+                        toLocation: _locationNameCache['${j.id}_to'] ?? j.to,
+                        isUpcoming: false,
+                        imageUrl: j.imageUrl,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => JourneyDetailsPage(journey: j),
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   )),
                   const SizedBox(height: 80),

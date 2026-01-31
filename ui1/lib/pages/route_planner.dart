@@ -458,9 +458,6 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
               _selectedRouteIndex = routeIndex;
               _updateRoutePolylines();
             });
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Selected: ${_routes[routeIndex].name}')),
-            );
           },
           preferences: (
             avoidClaustrophobic: _avoidClaustrophobic,

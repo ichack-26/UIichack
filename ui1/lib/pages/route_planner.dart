@@ -840,10 +840,11 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
                         final index = entry.key;
                         final route = entry.value;
                         final isSelected = _selectedRouteIndex == index;
+                        final routeColor = route.polyline.color;
                         return Card(
-                          color: isSelected ? Colors.blue.shade50 : null,
+                          color: isSelected ? routeColor.withAlpha(51) : null,
                           child: ListTile(
-                            leading: const Icon(Icons.directions),
+                            leading: Icon(Icons.directions, color: routeColor),
                             title: Text(route.name),
                             subtitle: Text(route.description),
                             trailing: ElevatedButton(
@@ -856,7 +857,7 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
                                 }
                               },
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: isSelected ? Colors.blue : Colors.grey,
+                                backgroundColor: isSelected ? routeColor : Colors.grey,
                               ),
                               child: Text(isSelected ? 'Selected' : 'Select'),
                             ),

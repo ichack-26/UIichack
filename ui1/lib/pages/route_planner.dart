@@ -35,6 +35,11 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
   bool _avoidStairs = false;
   bool _wheelchairAccessible = false;
 
+  // Routes state
+  List<Route> _routes = [];
+  int? _selectedRouteIndex;
+  List<Polyline> _polylines = [];
+
   // UI state for collapsible preferences
   bool _prefsExpanded = false;
 
@@ -337,6 +342,9 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                       maxNativeZoom: 19,
                       maxZoom: 19,
                     ),
+                    PolylineLayer(
+                      polylines: _polylines,
+                    ),
                     MarkerLayer(
                       markers: _markers,
                     ),
@@ -372,26 +380,6 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                       ),
                     ),
                   ),
-                // Fullscreen map button
-                Positioned(
-                  bottom: 16,
-                  right: 16,
-                  child: FloatingActionButton(
-                    heroTag: 'fullscreenMapBtn',
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => FullscreenMapPage(
-                            markers: _markers,
-                            userLocation: _userLocation,
-                          ),
-                        ),
-                      );
-                    },
-                    backgroundColor: Colors.blue,
-                    child: const Icon(Icons.fullscreen),
-                  ),
-                ),
               ],
             ),
           ),
@@ -452,83 +440,120 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
   void _planRoute() {
     if (_fromLocation == null || _toLocation == null || _selectedDate == null) return;
 
-    final suggestions = _generateMockRoutes();
+    // Generate mock routes
+    _routes = _generateMockRoutes();
+    
+    setState(() {
+      _selectedRouteIndex = 0;
+    });
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => Padding(
-        padding: const EdgeInsets.only(top: 16.0, left: 16, right: 16, bottom: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Suggested routes', style: Theme.of(context).textTheme.titleMedium),
-                IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ...suggestions.map((route) => Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.directions),
-                    title: Text(route),
-                    subtitle: Text(_toAddress.isEmpty ? 'Destination set' : 'To: $_toAddress'),
-                    trailing: ElevatedButton(
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Selected route: $route')),
-                        );
-                      },
-                      child: const Text('Select'),
-                    ),
-                  ),
-                )),
-            const SizedBox(height: 12),
-            Text('Preferences used:', style: Theme.of(context).textTheme.bodyMedium),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 8,
-              children: [
-                if (_avoidClaustrophobic) Chip(label: const Text('Avoid claustrophobic')),
-                if (_requireLift) Chip(label: const Text('Require lift')),
-                if (_avoidStairs) Chip(label: const Text('Avoid stairs')),
-                if (_wheelchairAccessible) Chip(label: const Text('Wheelchair only')),
-                if (!_avoidClaustrophobic && !_requireLift && !_avoidStairs && !_wheelchairAccessible)
-                  const Text('None'),
-              ],
-            ),
-            const SizedBox(height: 8),
-          ],
+    // Navigate to fullscreen map with route selection
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => FullscreenMapPage(
+          markers: _markers,
+          userLocation: _userLocation,
+          routes: _routes,
+          onRouteSelected: (routeIndex) {
+            setState(() {
+              _selectedRouteIndex = routeIndex;
+              _updateRoutePolylines();
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Selected: ${_routes[routeIndex].name}')),
+            );
+          },
+          preferences: (
+            avoidClaustrophobic: _avoidClaustrophobic,
+            requireLift: _requireLift,
+            avoidStairs: _avoidStairs,
+            wheelchairAccessible: _wheelchairAccessible,
+          ),
         ),
       ),
     );
   }
 
-  List<String> _generateMockRoutes() {
-    final List<String> routes = [];
-
-    if (_wheelchairAccessible || _requireLift) {
-      routes.add('Step-free via Main Concourse (uses lifts, ramps) — approx. 12 min');
-    } else {
-      routes.add('Fastest route via Central Stairs — approx. 9 min');
+  void _updateRoutePolylines() {
+    _polylines = [];
+    if (_selectedRouteIndex != null && _selectedRouteIndex! < _routes.length) {
+      final selectedRoute = _routes[_selectedRouteIndex!];
+      _polylines = [selectedRoute.polyline];
     }
+  }
 
-    if (_avoidClaustrophobic) {
-      routes.add('Scenic route avoiding tunnels and narrow passageways — approx. 15 min');
-    } else {
-      routes.add('Shortest route (may include tight passages) — approx. 8 min');
-    }
-
-    if (_avoidStairs) {
-      routes.add('Stairs-free route following elevators and ramps — approx. 14 min');
-    }
+  List<Route> _generateMockRoutes() {
+    final List<Route> routes = [];
+    
+    // Route 1: Direct/Fastest route (blue)
+    routes.add(Route(
+      name: _wheelchairAccessible || _requireLift 
+        ? 'Step-free via Main Concourse'
+        : 'Fastest route via Central Stairs',
+      description: _wheelchairAccessible || _requireLift
+        ? 'Uses lifts, ramps — approx. 12 min'
+        : 'Approx. 9 min',
+      polyline: Polyline(
+        points: [
+          _fromLocation!,
+          LatLng(
+            (_fromLocation!.latitude + _toLocation!.latitude) / 2,
+            (_fromLocation!.longitude + _toLocation!.longitude) / 2,
+          ),
+          _toLocation!,
+        ],
+        color: Colors.blue,
+        strokeWidth: 4,
+      ),
+    ));
+    
+    // Route 2: Scenic route (green)
+    routes.add(Route(
+      name: 'Scenic route',
+      description: _avoidClaustrophobic
+        ? 'Through open spaces, avoiding tunnels — approx. 15 min'
+        : 'Through parks and landmarks — approx. 18 min',
+      polyline: Polyline(
+        points: [
+          _fromLocation!,
+          LatLng(
+            _fromLocation!.latitude + 0.002,
+            (_fromLocation!.longitude + _toLocation!.longitude) / 2,
+          ),
+          LatLng(
+            _toLocation!.latitude - 0.001,
+            _toLocation!.longitude,
+          ),
+          _toLocation!,
+        ],
+        color: Colors.green,
+        strokeWidth: 4,
+      ),
+    ));
+    
+    // Route 3: Accessible route (orange)
+    routes.add(Route(
+      name: 'Accessible route',
+      description: _avoidStairs
+        ? 'Stairs-free, elevators and ramps only — approx. 15 min'
+        : 'Wheelchair friendly, no major obstacles — approx. 14 min',
+      polyline: Polyline(
+        points: [
+          _fromLocation!,
+          LatLng(
+            _fromLocation!.latitude - 0.002,
+            (_fromLocation!.longitude + _toLocation!.longitude) / 2,
+          ),
+          LatLng(
+            _toLocation!.latitude + 0.001,
+            _toLocation!.longitude,
+          ),
+          _toLocation!,
+        ],
+        color: Colors.orange,
+        strokeWidth: 4,
+      ),
+    ));
 
     return routes;
   }
@@ -735,10 +760,16 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
 class FullscreenMapPage extends StatefulWidget {
   final List<Marker> markers;
   final LatLng userLocation;
+  final List<Route> routes;
+  final Function(int)? onRouteSelected;
+  final ({bool avoidClaustrophobic, bool requireLift, bool avoidStairs, bool wheelchairAccessible})? preferences;
 
   const FullscreenMapPage({
     required this.markers,
     required this.userLocation,
+    required this.routes,
+    this.onRouteSelected,
+    this.preferences,
   });
 
   @override
@@ -747,6 +778,7 @@ class FullscreenMapPage extends StatefulWidget {
 
 class _FullscreenMapPageState extends State<FullscreenMapPage> {
   late MapController _fullscreenMapController;
+  int? _selectedRouteIndex = 0;
 
   @override
   void initState() {
@@ -756,6 +788,85 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
     Future.delayed(const Duration(milliseconds: 500), () {
       _fullscreenMapController.move(widget.userLocation, 14);
     });
+    
+    // Show route selection bottom sheet if we have routes
+    if (widget.routes.isNotEmpty) {
+      Future.delayed(const Duration(milliseconds: 600), () => _showRouteSelectionSheet());
+    }
+  }
+
+  void _showRouteSelectionSheet() {
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => Padding(
+        padding: const EdgeInsets.only(top: 16.0, left: 16, right: 16, bottom: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Suggested routes', style: Theme.of(context).textTheme.titleMedium),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ...widget.routes.asMap().entries.map((entry) {
+              final index = entry.key;
+              final route = entry.value;
+              final isSelected = _selectedRouteIndex == index;
+              return Card(
+                color: isSelected ? Colors.blue.shade50 : null,
+                child: ListTile(
+                  leading: const Icon(Icons.directions),
+                  title: Text(route.name),
+                  subtitle: Text(route.description),
+                  trailing: ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _selectedRouteIndex = index;
+                      });
+                      if (widget.onRouteSelected != null) {
+                        widget.onRouteSelected!(index);
+                      }
+                      Navigator.of(context).pop();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isSelected ? Colors.blue : Colors.grey,
+                    ),
+                    child: Text(isSelected ? 'Selected' : 'Select'),
+                  ),
+                ),
+              );
+            }).toList(),
+            const SizedBox(height: 12),
+            Text('Preferences used:', style: Theme.of(context).textTheme.bodyMedium),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              children: [
+                if (widget.preferences?.avoidClaustrophobic ?? false) Chip(label: const Text('Avoid claustrophobic')),
+                if (widget.preferences?.requireLift ?? false) Chip(label: const Text('Require lift')),
+                if (widget.preferences?.avoidStairs ?? false) Chip(label: const Text('Avoid stairs')),
+                if (widget.preferences?.wheelchairAccessible ?? false) Chip(label: const Text('Wheelchair only')),
+                if ((widget.preferences?.avoidClaustrophobic ?? false) == false && 
+                    (widget.preferences?.requireLift ?? false) == false && 
+                    (widget.preferences?.avoidStairs ?? false) == false && 
+                    (widget.preferences?.wheelchairAccessible ?? false) == false)
+                  const Text('None'),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -777,6 +888,9 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
             userAgentPackageName: 'com.example.ui1',
             maxNativeZoom: 19,
             maxZoom: 19,
+          ),
+          PolylineLayer(
+            polylines: widget.routes.map((route) => route.polyline).toList(),
           ),
           MarkerLayer(
             markers: widget.markers,
@@ -805,4 +919,16 @@ class SearchResult {
       lon: double.parse(json['lon'] as String),
     );
   }
+}
+
+class Route {
+  final String name;
+  final String description;
+  final Polyline polyline;
+
+  Route({
+    required this.name,
+    required this.description,
+    required this.polyline,
+  });
 }

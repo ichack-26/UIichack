@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:async';
 
 class RoutePlannerRoute extends StatefulWidget {
   const RoutePlannerRoute({super.key});
@@ -8,17 +13,509 @@ class RoutePlannerRoute extends StatefulWidget {
 }
 
 class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
+  final MapController _mapController = MapController();
+  final TextEditingController _searchController = TextEditingController();
+  DateTime? _selectedDate;
+  LatLng? _fromLocation;
+  LatLng? _toLocation;
+  String _fromAddress = '';
+  String _toAddress = '';
+  List<Marker> _markers = [];
+  bool _selectingStart = false;
+  bool _selectingDestination = false;
+  List<SearchResult> _searchResults = [];
+  bool _isSearching = false;
+  Timer? _debounce;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Route Planner'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
-
-
-      body: const Center(
-        child: Text('This is the Route Planner page'),
+      body: Column(
+        children: [
+          // Search and input section
+          Container(
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.2),
+                  spreadRadius: 1,
+                  blurRadius: 5,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Start Place
+                InkWell(
+                  onTap: () => _showLocationPicker(true),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.blue),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.trip_origin, color: Colors.blue),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _fromAddress.isEmpty ? 'Select Start Place' : _fromAddress,
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: _fromAddress.isEmpty ? Colors.grey : Colors.black,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const Icon(Icons.search, color: Colors.grey),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Destination Place
+                InkWell(
+                  onTap: () => _showLocationPicker(false),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.red),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.location_on, color: Colors.red),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _toAddress.isEmpty ? 'Select Destination Place' : _toAddress,
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: _toAddress.isEmpty ? Colors.grey : Colors.black,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const Icon(Icons.search, color: Colors.grey),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Departure Time
+                InkWell(
+                  onTap: () async {
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: _selectedDate ?? DateTime.now(),
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime(2101),
+                    );
+                    if (date != null) {
+                      final time = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay.now(),
+                      );
+                      if (time != null) {
+                        setState(() {
+                          _selectedDate = DateTime(
+                            date.year,
+                            date.month,
+                            date.day,
+                            time.hour,
+                            time.minute,
+                          );
+                        });
+                      }
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.access_time, color: Colors.grey),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _selectedDate == null
+                                ? 'Select Departure Time'
+                                : '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year} ${_selectedDate!.hour}:${_selectedDate!.minute.toString().padLeft(2, '0')}',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: _selectedDate == null ? Colors.grey : Colors.black,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Go Button
+                ElevatedButton(
+                  onPressed: (_fromLocation != null && _toLocation != null && _selectedDate != null)
+                      ? () {
+                          print('From: $_fromAddress ($_fromLocation)');
+                          print('To: $_toAddress ($_toLocation)');
+                          print('Departure: $_selectedDate');
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Route planning in progress...')),
+                          );
+                        }
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.grey[300],
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text(
+                    'Plan Route',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Map section
+          Expanded(
+            child: Stack(
+              children: [
+                FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: const LatLng(37.7749, -122.4194), // San Francisco
+                    initialZoom: 12,
+                    onTap: (tapPosition, point) {
+                      if (_selectingStart) {
+                        setState(() {
+                          _fromLocation = point;
+                          _fromAddress = 'Lat: ${point.latitude.toStringAsFixed(4)}, Lng: ${point.longitude.toStringAsFixed(4)}';
+                          _updateMarkers();
+                          _selectingStart = false;
+                        });
+                      } else if (_selectingDestination) {
+                        setState(() {
+                          _toLocation = point;
+                          _toAddress = 'Lat: ${point.latitude.toStringAsFixed(4)}, Lng: ${point.longitude.toStringAsFixed(4)}';
+                          _updateMarkers();
+                          _selectingDestination = false;
+                        });
+                      }
+                    },
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.example.ui1',
+                      maxNativeZoom: 19,
+                      maxZoom: 19,
+                    ),
+                    MarkerLayer(
+                      markers: _markers,
+                    ),
+                  ],
+                ),
+                if (_selectingStart || _selectingDestination)
+                  Positioned(
+                    top: 16,
+                    left: 16,
+                    right: 16,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        _selectingStart 
+                          ? 'Tap on the map to select start location'
+                          : 'Tap on the map to select destination',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
+    );
+  }
+
+  void _updateMarkers() {
+    _markers = [];
+    if (_fromLocation != null) {
+      _markers.add(
+        Marker(
+          point: _fromLocation!,
+          width: 40,
+          height: 40,
+          child: const Icon(
+            Icons.location_pin,
+            color: Colors.blue,
+            size: 40,
+          ),
+        ),
+      );
+    }
+    if (_toLocation != null) {
+      _markers.add(
+        Marker(
+          point: _toLocation!,
+          width: 40,
+          height: 40,
+          child: const Icon(
+            Icons.location_pin,
+            color: Colors.red,
+            size: 40,
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _searchPlaces(String query) async {
+    if (query.isEmpty) {
+      setState(() {
+        _searchResults = [];
+        _isSearching = false;
+      });
+      return;
+    }
+
+    // Cancel previous timer
+    _debounce?.cancel();
+
+    setState(() {
+      _isSearching = true;
+    });
+
+    // Debounce the search request
+    _debounce = Timer(const Duration(milliseconds: 500), () async {
+      try {
+        final url = Uri.parse(
+          'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&limit=5',
+        );
+        final response = await http.get(
+          url,
+          headers: {'User-Agent': 'FlutterApp'},
+        );
+
+        if (response.statusCode == 200) {
+          final List<dynamic> data = json.decode(response.body);
+          if (mounted) {
+            setState(() {
+              _searchResults = data.map((item) => SearchResult.fromJson(item)).toList();
+              _isSearching = false;
+            });
+          }
+        }
+      } catch (e) {
+        print('Error searching: $e');
+        if (mounted) {
+          setState(() {
+            _isSearching = false;
+          });
+        }
+      }
+    });
+  }
+
+  void _showLocationPicker(bool isStart) {
+    _searchController.clear();
+    _searchResults = [];
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          builder: (_, controller) => Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[400],
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        isStart ? 'Select Start Location' : 'Select Destination',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: 'Search for a place',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          prefixIcon: const Icon(Icons.search),
+                        ),
+                        onChanged: (value) {
+                          _searchPlaces(value).then((_) {
+                            setModalState(() {});
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                if (_isSearching)
+                  const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: CircularProgressIndicator(),
+                  )
+                else if (_searchResults.isNotEmpty)
+                  Expanded(
+                    child: ListView.builder(
+                      controller: controller,
+                      itemCount: _searchResults.length,
+                      itemBuilder: (context, index) {
+                        final result = _searchResults[index];
+                        return ListTile(
+                          leading: Icon(
+                            Icons.location_on,
+                            color: isStart ? Colors.blue : Colors.red,
+                          ),
+                          title: Text(result.displayName),
+                          onTap: () {
+                            setState(() {
+                              final location = LatLng(result.lat, result.lon);
+                              if (isStart) {
+                                _fromLocation = location;
+                                _fromAddress = result.displayName;
+                              } else {
+                                _toLocation = location;
+                                _toAddress = result.displayName;
+                              }
+                              _updateMarkers();
+                            });
+                            _mapController.move(LatLng(result.lat, result.lon), 14);
+                            Navigator.of(context).pop();
+                          },
+                        );
+                      },
+                    ),
+                  )
+                else
+                  Column(
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Text(
+                          'Search for a place or tap the button below to select from map',
+                          style: TextStyle(color: Colors.grey),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          // Use Future.delayed to ensure modal is fully closed
+                          Future.delayed(const Duration(milliseconds: 100), () {
+                            if (mounted) {
+                              setState(() {
+                                if (isStart) {
+                                  _selectingStart = true;
+                                } else {
+                                  _selectingDestination = true;
+                                }
+                              });
+                            }
+                          });
+                        },
+                        icon: const Icon(Icons.map),
+                        label: const Text('Select from Map'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+}
+
+class SearchResult {
+  final String displayName;
+  final double lat;
+  final double lon;
+
+  SearchResult({
+    required this.displayName,
+    required this.lat,
+    required this.lon,
+  });
+
+  factory SearchResult.fromJson(Map<String, dynamic> json) {
+    return SearchResult(
+      displayName: json['display_name'] as String,
+      lat: double.parse(json['lat'] as String),
+      lon: double.parse(json['lon'] as String),
     );
   }
 }

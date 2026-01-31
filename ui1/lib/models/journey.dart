@@ -8,6 +8,7 @@ class Journey {
   final double toLat;
   final double toLng;
   final List<Map<String, double>> polylinePoints; // Stores route waypoints
+  final String? imageUrl; // URL to a route-relevant image
 
   Journey({
     required this.id,
@@ -19,6 +20,7 @@ class Journey {
     required this.toLat,
     required this.toLng,
     required this.polylinePoints,
+    this.imageUrl,
   });
 
   bool get isUpcoming => date.isAfter(DateTime.now());
@@ -35,6 +37,7 @@ class Journey {
       'toLat': toLat,
       'toLng': toLng,
       'polylinePoints': polylinePoints,
+      'imageUrl': imageUrl,
     };
   }
 
@@ -54,6 +57,7 @@ class Journey {
       toLat: json['toLat'] as double,
       toLng: json['toLng'] as double,
       polylinePoints: pointsList,
+      imageUrl: json['imageUrl'] as String?,
     );
   }
 }

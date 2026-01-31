@@ -45,6 +45,96 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
   // UI state for collapsible preferences
   bool _prefsExpanded = false;
 
+  String _generateRouteImageUrl(String destination) {
+    // Extract keywords from destination for relevant images
+    List<String> keywords = destination.toLowerCase().split(',')[0].split(' ').take(2).toList();
+    
+    // Common location keywords with themed images
+    final keywordImageMap = {
+      'london': 'https://images.unsplash.com/photo-1486299267070-83823f5448dd?w=600&h=400&fit=crop',
+      'paris': 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=600&h=400&fit=crop',
+      'new': 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?w=600&h=400&fit=crop',
+      'york': 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?w=600&h=400&fit=crop',
+      'tokyo': 'https://images.unsplash.com/photo-1540959375944-7049f642e9a0?w=600&h=400&fit=crop',
+      'sydney': 'https://images.unsplash.com/photo-1506973404872-a4a8b6ce2f0d?w=600&h=400&fit=crop',
+      'dubai': 'https://images.unsplash.com/photo-1512453475900-7e03e547a1b1?w=600&h=400&fit=crop',
+      'mountain': 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=400&fit=crop',
+      'beach': 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&h=400&fit=crop',
+      'forest': 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=600&h=400&fit=crop',
+      'airport': 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=600&h=400&fit=crop',
+    };
+    
+    // Check if any keyword matches
+    for (String keyword in keywords) {
+      if (keywordImageMap.containsKey(keyword)) {
+        return keywordImageMap[keyword]!;
+      }
+    }
+    
+    // Default to generic travel image
+    return 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=600&h=400&fit=crop';
+  }
+
+  String _getPhotoFromRoute() {
+    try {
+      if (_routes.isEmpty || _selectedRouteIndex == null) {
+        return _generateRouteImageUrl(_toAddress);
+      }
+
+      // Get a random point from the selected route
+      final route = _routes[_selectedRouteIndex!];
+      if (route.polyline.points.isEmpty) {
+        return _generateRouteImageUrl(_toAddress);
+      }
+
+      // Pick a point along the route
+      final pointCount = route.polyline.points.length;
+      if (pointCount <= 2) {
+        return _generateRouteImageUrl(_toAddress);
+      }
+
+      final midIndex = pointCount ~/ 2;
+      final midPoint = route.polyline.points[midIndex];
+
+      // Use coordinates to deterministically pick an image
+      // This ensures each unique route gets a different but consistent image
+      final coordHash = (midPoint.latitude * 1000000).toInt().abs() + 
+                       (midPoint.longitude * 1000000).toInt().abs();
+      
+      // Curated list of high-quality travel/street images from Unsplash
+      final images = [
+        'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=600&h=400&fit=crop',
+        'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=600&h=400&fit=crop',
+        'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=600&h=400&fit=crop',
+        'https://images.unsplash.com/photo-1444723121867-7a241cacace9?w=600&h=400&fit=crop',
+        'https://images.unsplash.com/photo-1514565131-fce0801e5785?w=600&h=400&fit=crop',
+        'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=600&h=400&fit=crop',
+        'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=600&h=400&fit=crop',
+        'https://images.unsplash.com/photo-1515542622106-78bda8ba0e5b?w=600&h=400&fit=crop',
+        'https://images.unsplash.com/photo-1541417904950-b855846fe074?w=600&h=400&fit=crop',
+        'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?w=600&h=400&fit=crop',
+        'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=600&h=400&fit=crop',
+        'https://images.unsplash.com/photo-1486299267070-83823f5448dd?w=600&h=400&fit=crop',
+        'https://images.unsplash.com/photo-1533929736458-ca588d08c8be?w=600&h=400&fit=crop',
+        'https://images.unsplash.com/photo-1524230572899-a752b3835840?w=600&h=400&fit=crop',
+        'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=600&h=400&fit=crop',
+        'https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?w=600&h=400&fit=crop',
+        'https://images.unsplash.com/photo-1508804185872-d7badad00f7d?w=600&h=400&fit=crop',
+        'https://images.unsplash.com/photo-1508739773434-c26b3d09e071?w=600&h=400&fit=crop',
+        'https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?w=600&h=400&fit=crop',
+        'https://images.unsplash.com/photo-1534430480872-3498386e7856?w=600&h=400&fit=crop',
+      ];
+
+      final imageIndex = coordHash % images.length;
+      print('Selected image ${imageIndex + 1} of ${images.length} for route');
+      
+      return images[imageIndex];
+    } catch (e) {
+      print('Error selecting route photo: $e');
+      return _generateRouteImageUrl(_toAddress);
+    }
+  }
+
   Future<void> _saveJourneyToStorage() async {
     if (_fromLocation == null || _toLocation == null || _selectedRouteIndex == null) {
       print('Cannot save: missing fromLocation, toLocation, or selectedRouteIndex');
@@ -68,6 +158,9 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
       // Generate unique ID for the journey
       final journeyId = DateTime.now().millisecondsSinceEpoch.toString();
       
+      // Get a photo based on the route coordinates
+      final imageUrl = _getPhotoFromRoute();
+      
       // Create journey object with coordinates and route polyline
       final journey = Journey(
         id: journeyId,
@@ -79,6 +172,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
         toLat: _toLocation!.latitude,
         toLng: _toLocation!.longitude,
         polylinePoints: polylinePoints,
+        imageUrl: imageUrl,
       );
       
       // Get existing journeys

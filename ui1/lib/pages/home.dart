@@ -115,6 +115,7 @@ class _HomePageRouteState extends State<HomePageRoute> {
                         fromLocation: j.from,
                         toLocation: j.to,
                         isUpcoming: true,
+                        imageUrl: j.imageUrl,
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
@@ -137,6 +138,7 @@ class _HomePageRouteState extends State<HomePageRoute> {
                       fromLocation: j.from,
                       toLocation: j.to,
                       isUpcoming: false,
+                      imageUrl: j.imageUrl,
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(

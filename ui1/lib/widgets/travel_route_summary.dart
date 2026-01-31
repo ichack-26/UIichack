@@ -7,6 +7,7 @@ class TravelRouteSummaryWidget extends StatelessWidget {
     required this.fromLocation,
     required this.toLocation,
     this.isUpcoming = false,
+    this.imageUrl,
     this.onTap,
   });
 
@@ -14,6 +15,7 @@ class TravelRouteSummaryWidget extends StatelessWidget {
   final String fromLocation;
   final String toLocation;
   final bool isUpcoming;
+  final String? imageUrl;
   final VoidCallback? onTap;
 
   @override
@@ -44,7 +46,7 @@ class TravelRouteSummaryWidget extends StatelessWidget {
               Container(
                 color: Colors.grey[300],
                 child: Image.network(
-                  'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=600&h=400&fit=crop',
+                  imageUrl ?? 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=600&h=400&fit=crop',
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) {
                     return Container(

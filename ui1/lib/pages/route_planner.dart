@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
+import 'package:geolocator/geolocator.dart';
 import 'dart:convert';
 import 'dart:async';
 
@@ -26,6 +27,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
   List<SearchResult> _searchResults = [];
   bool _isSearching = false;
   Timer? _debounce;
+  LatLng _userLocation = const LatLng(37.7749, -122.4194); // Default to San Francisco
 
   // User preferences
   bool _avoidClaustrophobic = false;
@@ -35,6 +37,47 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
 
   // UI state for collapsible preferences
   bool _prefsExpanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _getUserLocation();
+  }
+
+  Future<void> _getUserLocation() async {
+    try {
+      // Check permission status
+      LocationPermission permission = await Geolocator.checkPermission();
+      
+      if (permission == LocationPermission.denied) {
+        // Request permission
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          print('Location permissions are denied');
+          return;
+        }
+      }
+      
+      if (permission == LocationPermission.deniedForever) {
+        print('Location permissions are permanently denied');
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.best,
+        timeLimit: const Duration(seconds: 10),
+      );
+      
+      setState(() {
+        _userLocation = LatLng(position.latitude, position.longitude);
+        _mapController.move(_userLocation, 14);
+      });
+      print('User location obtained: $_userLocation');
+    } catch (e) {
+      print('Error getting user location: $e');
+      // Will use default San Francisco location
+    }
+  }
 
   String get _preferencesSummary {
     final count = [_avoidClaustrophobic, _requireLift, _avoidStairs, _wheelchairAccessible].where((v) => v).length;
@@ -261,8 +304,8 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                 FlutterMap(
                   mapController: _mapController,
                   options: MapOptions(
-                    initialCenter: const LatLng(37.7749, -122.4194), // San Francisco
-                    initialZoom: 12,
+                    initialCenter: _userLocation,
+                    initialZoom: 14,
                     onTap: (tapPosition, point) {
                       if (_selectingStart) {
                         setState(() {

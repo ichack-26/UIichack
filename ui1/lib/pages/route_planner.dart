@@ -70,6 +70,18 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
       
       setState(() {
         _userLocation = LatLng(position.latitude, position.longitude);
+        _markers = [
+          Marker(
+            point: _userLocation,
+            width: 40,
+            height: 40,
+            child: const Icon(
+              Icons.location_on,
+              color: Colors.cyan,
+              size: 40,
+            ),
+          ),
+        ];
         _mapController.move(_userLocation, 14);
       });
       print('User location obtained: $_userLocation');
@@ -375,35 +387,52 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
   }
 
   void _updateMarkers() {
-    _markers = [];
-    if (_fromLocation != null) {
+    setState(() {
+      _markers = [];
+      
+      // Add user's current location marker
       _markers.add(
         Marker(
-          point: _fromLocation!,
+          point: _userLocation,
           width: 40,
           height: 40,
           child: const Icon(
-            Icons.location_pin,
-            color: Colors.blue,
+            Icons.location_on,
+            color: Colors.cyan,
             size: 40,
           ),
         ),
       );
-    }
-    if (_toLocation != null) {
-      _markers.add(
-        Marker(
-          point: _toLocation!,
-          width: 40,
-          height: 40,
-          child: const Icon(
-            Icons.location_pin,
-            color: Colors.red,
-            size: 40,
+      
+      if (_fromLocation != null) {
+        _markers.add(
+          Marker(
+            point: _fromLocation!,
+            width: 40,
+            height: 40,
+            child: const Icon(
+              Icons.location_pin,
+              color: Colors.blue,
+              size: 40,
+            ),
           ),
-        ),
-      );
-    }
+        );
+      }
+      if (_toLocation != null) {
+        _markers.add(
+          Marker(
+            point: _toLocation!,
+            width: 40,
+            height: 40,
+            child: const Icon(
+              Icons.location_pin,
+              color: Colors.red,
+              size: 40,
+            ),
+          ),
+        );
+      }
+    });
   }
 
   void _planRoute() {

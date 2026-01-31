@@ -45,7 +45,7 @@ class _NavigationExampleState extends State<NavigationExample> {
           ),
           NavigationDestination(
             icon: Badge(child: Icon(Icons.notifications_sharp)),
-            label: 'Notifications',
+            label: 'Route Planner',
           ),
         ],
       ),

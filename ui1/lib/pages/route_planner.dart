@@ -27,6 +27,12 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
   bool _isSearching = false;
   Timer? _debounce;
 
+  // User preferences
+  bool _avoidClaustrophobic = false;
+  bool _requireLift = false;
+  bool _avoidStairs = false;
+  bool _wheelchairAccessible = false;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -164,17 +170,49 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                   ),
                 ),
                 const SizedBox(height: 16),
+
+                // Preferences
+                CheckboxListTile(
+                  value: _avoidClaustrophobic,
+                  onChanged: (v) => setState(() => _avoidClaustrophobic = v ?? false),
+                  title: const Text('Avoid claustrophobic areas'),
+                  subtitle: const Text('Avoid narrow tunnels or enclosed corridors'),
+                  secondary: const Icon(Icons.airline_stops_outlined),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+
+                CheckboxListTile(
+                  value: _requireLift,
+                  onChanged: (v) => setState(() => _requireLift = v ?? false),
+                  title: const Text('Require lift/elevator access'),
+                  subtitle: const Text('Prefer routes with elevator access'),
+                  secondary: const Icon(Icons.elevator),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+
+                CheckboxListTile(
+                  value: _avoidStairs,
+                  onChanged: (v) => setState(() => _avoidStairs = v ?? false),
+                  title: const Text('Avoid stairs'),
+                  subtitle: const Text('Prefer ramps and level paths'),
+                  secondary: const Icon(Icons.stairs),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+
+                CheckboxListTile(
+                  value: _wheelchairAccessible,
+                  onChanged: (v) => setState(() => _wheelchairAccessible = v ?? false),
+                  title: const Text('Wheelchair-accessible routes only'),
+                  subtitle: const Text('Filter to fully accessible options'),
+                  secondary: const Icon(Icons.accessible),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+
+                const SizedBox(height: 8),
                 // Go Button
                 ElevatedButton(
                   onPressed: (_fromLocation != null && _toLocation != null && _selectedDate != null)
-                      ? () {
-                          print('From: $_fromAddress ($_fromLocation)');
-                          print('To: $_toAddress ($_toLocation)');
-                          print('Departure: $_selectedDate');
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Route planning in progress...')),
-                          );
-                        }
+                      ? _planRoute
                       : null,
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
@@ -300,6 +338,90 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
         ),
       );
     }
+  }
+
+  void _planRoute() {
+    if (_fromLocation == null || _toLocation == null || _selectedDate == null) return;
+
+    final suggestions = _generateMockRoutes();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => Padding(
+        padding: const EdgeInsets.only(top: 16.0, left: 16, right: 16, bottom: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Suggested routes', style: Theme.of(context).textTheme.titleMedium),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ...suggestions.map((route) => Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.directions),
+                    title: Text(route),
+                    subtitle: Text(_toAddress.isEmpty ? 'Destination set' : 'To: $_toAddress'),
+                    trailing: ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Selected route: $route')),
+                        );
+                      },
+                      child: const Text('Select'),
+                    ),
+                  ),
+                )),
+            const SizedBox(height: 12),
+            Text('Preferences used:', style: Theme.of(context).textTheme.bodyMedium),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              children: [
+                if (_avoidClaustrophobic) Chip(label: const Text('Avoid claustrophobic')),
+                if (_requireLift) Chip(label: const Text('Require lift')),
+                if (_avoidStairs) Chip(label: const Text('Avoid stairs')),
+                if (_wheelchairAccessible) Chip(label: const Text('Wheelchair only')),
+                if (!_avoidClaustrophobic && !_requireLift && !_avoidStairs && !_wheelchairAccessible)
+                  const Text('None'),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<String> _generateMockRoutes() {
+    final List<String> routes = [];
+
+    if (_wheelchairAccessible || _requireLift) {
+      routes.add('Step-free via Main Concourse (uses lifts, ramps) — approx. 12 min');
+    } else {
+      routes.add('Fastest route via Central Stairs — approx. 9 min');
+    }
+
+    if (_avoidClaustrophobic) {
+      routes.add('Scenic route avoiding tunnels and narrow passageways — approx. 15 min');
+    } else {
+      routes.add('Shortest route (may include tight passages) — approx. 8 min');
+    }
+
+    if (_avoidStairs) {
+      routes.add('Stairs-free route following elevators and ramps — approx. 14 min');
+    }
+
+    return routes;
   }
 
   Future<void> _searchPlaces(String query) async {

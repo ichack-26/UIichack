@@ -871,6 +871,16 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
                             const Text('None'),
                         ],
                       ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                        ),
+                        child: const Text('Continue'),
+                      ),
                     ],
                   ),
                 ),

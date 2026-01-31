@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ui1/widgets/travel_route_summary.dart';
 
 class HomePageRoute extends StatefulWidget {
   const HomePageRoute({super.key, required this.title});
@@ -74,6 +75,7 @@ class _HomePageRouteState extends State<HomePageRoute> {
               '$_counter',
               style: Theme.of(context).textTheme.headlineMedium,
             ),
+            TravelRouteSummaryWidget(travelDate: DateTime.now(), fromLocation: "Home", toLocation: "London Victoria")
           ],
         ),
       ),

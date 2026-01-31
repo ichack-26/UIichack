@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:ui1/widgets/travel_route_summary.dart';
 import 'package:ui1/models/journey.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 class HomePageRoute extends StatefulWidget {
   const HomePageRoute({super.key, required this.title});
@@ -21,25 +23,35 @@ class HomePageRoute extends StatefulWidget {
 }
 
 class _HomePageRouteState extends State<HomePageRoute> {
-  int _counter = 0;
+  // List to hold journeys loaded from storage
+  List<Journey> _allJourneys = [];
+  bool _isLoading = true;
 
-  // sample journey data (replace with real data source later)
-  final List<Journey> _allJourneys = [
-    Journey(id: '1', date: DateTime.now().add(const Duration(days: 2)), from: 'Home', to: 'London Victoria'),
-    Journey(id: '2', date: DateTime.now().subtract(const Duration(days: 5)), from: 'Office', to: 'Manchester'),
-    Journey(id: '3', date: DateTime.now().add(const Duration(days: 7)), from: 'Work', to: 'Bristol'),
-    Journey(id: '4', date: DateTime.now().subtract(const Duration(days: 30)), from: 'Home', to: 'Paris'),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadJourneys();
+  }
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  Future<void> _loadJourneys() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final journeysJson = prefs.getStringList('journeys') ?? [];
+      
+      setState(() {
+        _allJourneys = journeysJson
+            .map((json) => Journey.fromJson(jsonDecode(json)))
+            .toList();
+        _isLoading = false;
+      });
+      
+      print('Loaded ${_allJourneys.length} journeys from storage');
+    } catch (e) {
+      print('Error loading journeys: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -62,22 +74,23 @@ class _HomePageRouteState extends State<HomePageRoute> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Builder(builder: (context) {
-          // sample journeys
-          final List<Journey> all = _allJourneys;
-          final now = DateTime.now();
-          final upcoming = all.where((j) => j.isUpcoming).toList()
-            ..sort((a, b) => a.date.compareTo(b.date));
-          final history = all.where((j) => !j.isUpcoming).toList()
-            ..sort((a, b) => b.date.compareTo(a.date));
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : Builder(builder: (context) {
+                // Journeys from storage
+                final List<Journey> all = _allJourneys;
+                final upcoming = all.where((j) => j.isUpcoming).toList()
+                  ..sort((a, b) => a.date.compareTo(b.date));
+                final history = all.where((j) => !j.isUpcoming).toList()
+                  ..sort((a, b) => b.date.compareTo(a.date));
 
-          return ListView(
-            children: [
-              Text('Upcoming journeys', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 8),
-              if (upcoming.isEmpty)
-                const Text('No upcoming journeys', style: TextStyle(color: Colors.grey)),
-              ...upcoming.map((j) => Padding(
+                return ListView(
+                  children: [
+                    Text('Upcoming journeys', style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 8),
+                    if (upcoming.isEmpty)
+                      const Text('No upcoming journeys', style: TextStyle(color: Colors.grey)),
+                    ...upcoming.map((j) => Padding(
                     padding: const EdgeInsets.only(bottom: 12.0),
                     child: TravelRouteSummaryWidget(
                       travelDate: j.date,
@@ -103,12 +116,12 @@ class _HomePageRouteState extends State<HomePageRoute> {
                   )),
             ],
           );
-        }),
+            }),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+        onPressed: () => _loadJourneys(),
+        tooltip: 'Refresh',
+        child: const Icon(Icons.refresh),
       ),
     );
   }

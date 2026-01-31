@@ -3,8 +3,10 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:async';
+import 'package:ui1/models/journey.dart';
 
 class RoutePlannerRoute extends StatefulWidget {
   const RoutePlannerRoute({super.key});
@@ -42,6 +44,38 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
 
   // UI state for collapsible preferences
   bool _prefsExpanded = false;
+
+  Future<void> _saveJourneyToStorage() async {
+    if (_fromLocation == null || _toLocation == null || _selectedRouteIndex == null) return;
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Generate unique ID for the journey
+      final journeyId = DateTime.now().millisecondsSinceEpoch.toString();
+      
+      // Create journey object
+      final journey = Journey(
+        id: journeyId,
+        date: _selectedDate,
+        from: _fromAddress,
+        to: _toAddress,
+      );
+      
+      // Get existing journeys
+      final journeysJson = prefs.getStringList('journeys') ?? [];
+      
+      // Add new journey
+      journeysJson.add(jsonEncode(journey.toJson()));
+      
+      // Save back to storage
+      await prefs.setStringList('journeys', journeysJson);
+      
+      print('Journey saved: ${journey.id}');
+    } catch (e) {
+      print('Error saving journey: $e');
+    }
+  }
 
   @override
   void initState() {
@@ -459,6 +493,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
               _updateRoutePolylines();
             });
           },
+          onContinue: _saveJourneyToStorage,
           preferences: (
             avoidClaustrophobic: _avoidClaustrophobic,
             requireLift: _requireLift,
@@ -758,6 +793,7 @@ class FullscreenMapPage extends StatefulWidget {
   final LatLng userLocation;
   final List<Route> routes;
   final Function(int)? onRouteSelected;
+  final VoidCallback? onContinue;
   final ({bool avoidClaustrophobic, bool requireLift, bool avoidStairs, bool wheelchairAccessible})? preferences;
 
   const FullscreenMapPage({
@@ -765,6 +801,7 @@ class FullscreenMapPage extends StatefulWidget {
     required this.userLocation,
     required this.routes,
     this.onRouteSelected,
+    this.onContinue,
     this.preferences,
   });
 
@@ -874,7 +911,11 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
                       const SizedBox(height: 16),
                       ElevatedButton(
                         onPressed: () {
-                          Navigator.of(context).pop();
+                          // Save the journey to persistent storage
+                          if (widget.onContinue != null) {
+                            widget.onContinue!();
+                          }
+                          Navigator.of(context).pop(); // Close fullscreen map
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.blue,

@@ -33,6 +33,14 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
   bool _avoidStairs = false;
   bool _wheelchairAccessible = false;
 
+  // UI state for collapsible preferences
+  bool _prefsExpanded = false;
+
+  String get _preferencesSummary {
+    final count = [_avoidClaustrophobic, _requireLift, _avoidStairs, _wheelchairAccessible].where((v) => v).length;
+    return count == 0 ? 'None selected' : '$count selected';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -171,41 +179,56 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                 ),
                 const SizedBox(height: 16),
 
-                // Preferences
-                CheckboxListTile(
-                  value: _avoidClaustrophobic,
-                  onChanged: (v) => setState(() => _avoidClaustrophobic = v ?? false),
-                  title: const Text('Avoid claustrophobic areas'),
-                  subtitle: const Text('Avoid narrow tunnels or enclosed corridors'),
-                  secondary: const Icon(Icons.airline_stops_outlined),
-                  controlAffinity: ListTileControlAffinity.leading,
-                ),
+                // Collapsible Preferences
+                Theme(
+                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                  child: ExpansionTile(
+                    key: const Key('preferences_tile'),
+                    initiallyExpanded: _prefsExpanded,
+                    onExpansionChanged: (v) => setState(() => _prefsExpanded = v),
+                    leading: const Icon(Icons.filter_list),
+                    title: const Text('Preferences'),
+                    subtitle: Text(_preferencesSummary),
+                    children: [
+                      CheckboxListTile(
+                        value: _avoidClaustrophobic,
+                        onChanged: (v) => setState(() => _avoidClaustrophobic = v ?? false),
+                        title: const Text('Avoid claustrophobic areas'),
+                        subtitle: const Text('Avoid narrow tunnels or enclosed corridors'),
+                        secondary: const Icon(Icons.airline_stops_outlined),
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
 
-                CheckboxListTile(
-                  value: _requireLift,
-                  onChanged: (v) => setState(() => _requireLift = v ?? false),
-                  title: const Text('Require lift/elevator access'),
-                  subtitle: const Text('Prefer routes with elevator access'),
-                  secondary: const Icon(Icons.elevator),
-                  controlAffinity: ListTileControlAffinity.leading,
-                ),
+                      CheckboxListTile(
+                        value: _requireLift,
+                        onChanged: (v) => setState(() => _requireLift = v ?? false),
+                        title: const Text('Require lift/elevator access'),
+                        subtitle: const Text('Prefer routes with elevator access'),
+                        secondary: const Icon(Icons.elevator),
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
 
-                CheckboxListTile(
-                  value: _avoidStairs,
-                  onChanged: (v) => setState(() => _avoidStairs = v ?? false),
-                  title: const Text('Avoid stairs'),
-                  subtitle: const Text('Prefer ramps and level paths'),
-                  secondary: const Icon(Icons.stairs),
-                  controlAffinity: ListTileControlAffinity.leading,
-                ),
+                      CheckboxListTile(
+                        value: _avoidStairs,
+                        onChanged: (v) => setState(() => _avoidStairs = v ?? false),
+                        title: const Text('Avoid stairs'),
+                        subtitle: const Text('Prefer ramps and level paths'),
+                        secondary: const Icon(Icons.stairs),
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
 
-                CheckboxListTile(
-                  value: _wheelchairAccessible,
-                  onChanged: (v) => setState(() => _wheelchairAccessible = v ?? false),
-                  title: const Text('Wheelchair-accessible routes only'),
-                  subtitle: const Text('Filter to fully accessible options'),
-                  secondary: const Icon(Icons.accessible),
-                  controlAffinity: ListTileControlAffinity.leading,
+                      CheckboxListTile(
+                        value: _wheelchairAccessible,
+                        onChanged: (v) => setState(() => _wheelchairAccessible = v ?? false),
+                        title: const Text('Wheelchair-accessible routes only'),
+                        subtitle: const Text('Filter to fully accessible options'),
+                        secondary: const Icon(Icons.accessible),
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
+
+                      const SizedBox(height: 4),
+                    ],
+                  ),
                 ),
 
                 const SizedBox(height: 8),

@@ -30,11 +30,32 @@ class _HomePageRouteState extends State<HomePageRoute> {
   bool _isLoading = true;
   final Map<String, String> _locationNameCache = {};
   bool _isResolvingLocations = false;
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _todayKey = GlobalKey();
+  final GlobalKey _upcomingKey = GlobalKey();
+  final GlobalKey _historyKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
     _loadJourneys();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToSection(GlobalKey key) {
+    final context = key.currentContext;
+    if (context == null) return;
+    Scrollable.ensureVisible(
+      context,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+      alignment: 0.05,
+    );
   }
 
   Future<void> _loadJourneys() async {
@@ -312,7 +333,7 @@ class _HomePageRouteState extends State<HomePageRoute> {
           ),
         ],
       ),
-      body: _isLoading
+        body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Builder(builder: (context) {
               final now = DateTime.now();
@@ -333,12 +354,16 @@ class _HomePageRouteState extends State<HomePageRoute> {
               final history = all.where((j) => j.isFinished).toList()
                 ..sort((a, b) => b.date.compareTo(a.date));
 
-              return ListView(
-                padding: const EdgeInsets.symmetric(vertical: 24.0),
+              return Stack(
                 children: [
+                  ListView(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(vertical: 24.0),
+                    children: [
                   // Ongoing journeys section
                   if (ongoing.isNotEmpty) ...[
                     Padding(
+                      key: _todayKey,
                       padding: const EdgeInsets.symmetric(horizontal: 20.0),
                       child: Row(
                         children: [
@@ -416,6 +441,7 @@ class _HomePageRouteState extends State<HomePageRoute> {
                   
                   // Upcoming journeys section
                   Padding(
+                    key: _upcomingKey,
                     padding: const EdgeInsets.symmetric(horizontal: 20.0),
                     child: Row(
                       children: [
@@ -484,6 +510,7 @@ class _HomePageRouteState extends State<HomePageRoute> {
                   
                   // History section
                   Padding(
+                    key: _historyKey,
                     padding: const EdgeInsets.symmetric(horizontal: 20.0),
                     child: Row(
                       children: [
@@ -547,9 +574,50 @@ class _HomePageRouteState extends State<HomePageRoute> {
                       ),
                     ),
                   )),
-                  const SizedBox(height: 80),
-                ],
-              );
+                    const SizedBox(height: 120),
+                  ],
+                ),
+                Positioned(
+                  left: 16,
+                  right: 16,
+                  bottom: 16,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.95),
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.12),
+                          blurRadius: 12,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        TextButton.icon(
+                          onPressed: () => _scrollToSection(_todayKey),
+                          icon: const Icon(Icons.flash_on, size: 18),
+                          label: const Text('Today'),
+                        ),
+                        TextButton.icon(
+                          onPressed: () => _scrollToSection(_upcomingKey),
+                          icon: const Icon(Icons.event, size: 18),
+                          label: const Text('Upcoming'),
+                        ),
+                        TextButton.icon(
+                          onPressed: () => _scrollToSection(_historyKey),
+                          icon: const Icon(Icons.history, size: 18),
+                          label: const Text('History'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
             }),
     );
   }

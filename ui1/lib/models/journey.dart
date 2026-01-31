@@ -3,8 +3,21 @@ class Journey {
   final DateTime date;
   final String from;
   final String to;
+  final double fromLat;
+  final double fromLng;
+  final double toLat;
+  final double toLng;
 
-  Journey({required this.id, required this.date, required this.from, required this.to});
+  Journey({
+    required this.id,
+    required this.date,
+    required this.from,
+    required this.to,
+    required this.fromLat,
+    required this.fromLng,
+    required this.toLat,
+    required this.toLng,
+  });
 
   bool get isUpcoming => date.isAfter(DateTime.now());
 
@@ -15,6 +28,10 @@ class Journey {
       'date': date.toIso8601String(),
       'from': from,
       'to': to,
+      'fromLat': fromLat,
+      'fromLng': fromLng,
+      'toLat': toLat,
+      'toLng': toLng,
     };
   }
 
@@ -25,6 +42,10 @@ class Journey {
       date: DateTime.parse(json['date'] as String),
       from: json['from'] as String,
       to: json['to'] as String,
+      fromLat: json['fromLat'] as double,
+      fromLng: json['fromLng'] as double,
+      toLat: json['toLat'] as double,
+      toLng: json['toLng'] as double,
     );
   }
 }

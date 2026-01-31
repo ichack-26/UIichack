@@ -46,7 +46,10 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
   bool _prefsExpanded = false;
 
   Future<void> _saveJourneyToStorage() async {
-    if (_fromLocation == null || _toLocation == null || _selectedRouteIndex == null) return;
+    if (_fromLocation == null || _toLocation == null || _selectedRouteIndex == null) {
+      print('Cannot save: missing fromLocation, toLocation, or selectedRouteIndex');
+      return;
+    }
     
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -54,26 +57,34 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
       // Generate unique ID for the journey
       final journeyId = DateTime.now().millisecondsSinceEpoch.toString();
       
-      // Create journey object
+      // Create journey object with coordinates
       final journey = Journey(
         id: journeyId,
         date: _selectedDate,
         from: _fromAddress,
         to: _toAddress,
+        fromLat: _fromLocation!.latitude,
+        fromLng: _fromLocation!.longitude,
+        toLat: _toLocation!.latitude,
+        toLng: _toLocation!.longitude,
       );
       
       // Get existing journeys
       final journeysJson = prefs.getStringList('journeys') ?? [];
       
       // Add new journey
-      journeysJson.add(jsonEncode(journey.toJson()));
+      final jsonStr = jsonEncode(journey.toJson());
+      print('Saving journey JSON: $jsonStr');
+      journeysJson.add(jsonStr);
       
       // Save back to storage
       await prefs.setStringList('journeys', journeysJson);
       
-      print('Journey saved: ${journey.id}');
+      print('Journey saved successfully: ${journey.id}');
+      print('Total journeys in storage: ${journeysJson.length}');
     } catch (e) {
       print('Error saving journey: $e');
+      print('Stack trace: $e');
     }
   }
 
@@ -793,7 +804,7 @@ class FullscreenMapPage extends StatefulWidget {
   final LatLng userLocation;
   final List<Route> routes;
   final Function(int)? onRouteSelected;
-  final VoidCallback? onContinue;
+  final Future<void> Function()? onContinue;
   final ({bool avoidClaustrophobic, bool requireLift, bool avoidStairs, bool wheelchairAccessible})? preferences;
 
   const FullscreenMapPage({
@@ -910,10 +921,10 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
                       ),
                       const SizedBox(height: 16),
                       ElevatedButton(
-                        onPressed: () {
+                        onPressed: () async {
                           // Save the journey to persistent storage
                           if (widget.onContinue != null) {
-                            widget.onContinue!();
+                            await widget.onContinue!();
                           }
                           Navigator.of(context).pop(); // Close fullscreen map
                         },

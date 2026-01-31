@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ui1/widgets/travel_route_summary.dart';
 import 'package:ui1/models/journey.dart';
+import 'package:ui1/pages/journey_details.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
@@ -38,10 +39,26 @@ class _HomePageRouteState extends State<HomePageRoute> {
       final prefs = await SharedPreferences.getInstance();
       final journeysJson = prefs.getStringList('journeys') ?? [];
       
+      List<Journey> loadedJourneys = [];
+      
+      for (String json in journeysJson) {
+        try {
+          final journeyData = jsonDecode(json);
+          // Only load journeys that have the new coordinate fields
+          if (journeyData.containsKey('fromLat') && 
+              journeyData.containsKey('fromLng') && 
+              journeyData.containsKey('toLat') && 
+              journeyData.containsKey('toLng')) {
+            loadedJourneys.add(Journey.fromJson(journeyData));
+          }
+        } catch (e) {
+          print('Error loading individual journey: $e');
+          // Skip malformed journeys
+        }
+      }
+      
       setState(() {
-        _allJourneys = journeysJson
-            .map((json) => Journey.fromJson(jsonDecode(json)))
-            .toList();
+        _allJourneys = loadedJourneys;
         _isLoading = false;
       });
       
@@ -91,14 +108,21 @@ class _HomePageRouteState extends State<HomePageRoute> {
                     if (upcoming.isEmpty)
                       const Text('No upcoming journeys', style: TextStyle(color: Colors.grey)),
                     ...upcoming.map((j) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12.0),
-                    child: TravelRouteSummaryWidget(
-                      travelDate: j.date,
-                      fromLocation: j.from,
-                      toLocation: j.to,
-                      isUpcoming: true,
-                    ),
-                  )),
+                      padding: const EdgeInsets.only(bottom: 12.0),
+                      child: TravelRouteSummaryWidget(
+                        travelDate: j.date,
+                        fromLocation: j.from,
+                        toLocation: j.to,
+                        isUpcoming: true,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => JourneyDetailsPage(journey: j),
+                            ),
+                          );
+                        },
+                      ),
+                    )),
 
               const SizedBox(height: 16),
               Text('History', style: Theme.of(context).textTheme.titleLarge),
@@ -112,6 +136,13 @@ class _HomePageRouteState extends State<HomePageRoute> {
                       fromLocation: j.from,
                       toLocation: j.to,
                       isUpcoming: false,
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => JourneyDetailsPage(journey: j),
+                          ),
+                        );
+                      },
                     ),
                   )),
             ],

@@ -6,14 +6,18 @@ class TravelRouteSummaryWidget extends StatelessWidget {
     required this.travelDate,
     required this.fromLocation,
     required this.toLocation,
+    this.isUpcoming = false,
   });
 
   final DateTime travelDate;
   final String fromLocation; // todo - define types properly
   final String toLocation;
+  final bool isUpcoming;
 
   @override
   Widget build(BuildContext context) {
+    final dateLabel = travelDate.toLocal().toString().split(' ')[0];
+
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
@@ -31,9 +35,18 @@ class TravelRouteSummaryWidget extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Travel Date: ${travelDate.toLocal().toString().split(' ')[0]}',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Travel Date: $dateLabel',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              Chip(
+                label: Text(isUpcoming ? 'Upcoming' : 'Past'),
+                backgroundColor: isUpcoming ? Colors.green.shade100 : Colors.grey.shade200,
+              ),
+            ],
           ),
           const SizedBox(height: 8.0),
           Text(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ui1/widgets/travel_route_summary.dart';
+import 'package:ui1/models/journey.dart';
 
 class HomePageRoute extends StatefulWidget {
   const HomePageRoute({super.key, required this.title});
@@ -21,6 +22,14 @@ class HomePageRoute extends StatefulWidget {
 
 class _HomePageRouteState extends State<HomePageRoute> {
   int _counter = 0;
+
+  // sample journey data (replace with real data source later)
+  final List<Journey> _allJourneys = [
+    Journey(id: '1', date: DateTime.now().add(const Duration(days: 2)), from: 'Home', to: 'London Victoria'),
+    Journey(id: '2', date: DateTime.now().subtract(const Duration(days: 5)), from: 'Office', to: 'Manchester'),
+    Journey(id: '3', date: DateTime.now().add(const Duration(days: 7)), from: 'Work', to: 'Bristol'),
+    Journey(id: '4', date: DateTime.now().subtract(const Duration(days: 30)), from: 'Home', to: 'Paris'),
+  ];
 
   void _incrementCounter() {
     setState(() {
@@ -51,33 +60,50 @@ class _HomePageRouteState extends State<HomePageRoute> {
         // the App.build method, and use it to set our appbar title.
         title: Text(widget.title),
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            TravelRouteSummaryWidget(travelDate: DateTime.now(), fromLocation: "Home", toLocation: "London Victoria")
-          ],
-        ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Builder(builder: (context) {
+          // sample journeys
+          final List<Journey> all = _allJourneys;
+          final now = DateTime.now();
+          final upcoming = all.where((j) => j.isUpcoming).toList()
+            ..sort((a, b) => a.date.compareTo(b.date));
+          final history = all.where((j) => !j.isUpcoming).toList()
+            ..sort((a, b) => b.date.compareTo(a.date));
+
+          return ListView(
+            children: [
+              Text('Upcoming journeys', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              if (upcoming.isEmpty)
+                const Text('No upcoming journeys', style: TextStyle(color: Colors.grey)),
+              ...upcoming.map((j) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12.0),
+                    child: TravelRouteSummaryWidget(
+                      travelDate: j.date,
+                      fromLocation: j.from,
+                      toLocation: j.to,
+                      isUpcoming: true,
+                    ),
+                  )),
+
+              const SizedBox(height: 16),
+              Text('History', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              if (history.isEmpty)
+                const Text('No past journeys', style: TextStyle(color: Colors.grey)),
+              ...history.map((j) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12.0),
+                    child: TravelRouteSummaryWidget(
+                      travelDate: j.date,
+                      fromLocation: j.from,
+                      toLocation: j.to,
+                      isUpcoming: false,
+                    ),
+                  )),
+            ],
+          );
+        }),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _incrementCounter,

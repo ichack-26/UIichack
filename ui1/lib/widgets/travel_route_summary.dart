@@ -24,6 +24,7 @@ class TravelRouteSummaryWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final dateLabel = travelDate.toLocal().toString().split(' ')[0];
     final timeLabel = '${travelDate.hour}:${travelDate.minute.toString().padLeft(2, '0')}';
+    final isPast = !isUpcoming && !isOngoing;
     final statusLabel = isOngoing ? 'Now' : (isUpcoming ? 'Upcoming' : 'Completed');
     final statusColor = isOngoing
       ? Colors.orange.withOpacity(0.85)
@@ -74,6 +75,11 @@ class TravelRouteSummaryWidget extends StatelessWidget {
                   ),
                 ),
               ),
+              // Past overlay to grey out finished journeys
+              if (isPast)
+                Container(
+                  color: Colors.grey.withOpacity(0.35),
+                ),
               // Content
               Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -98,9 +104,9 @@ class TravelRouteSummaryWidget extends StatelessWidget {
                             ),
                             Text(
                               timeLabel,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 18,
-                                color: Colors.white,
+                                color: isPast ? Colors.white70 : Colors.white,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -134,9 +140,9 @@ class TravelRouteSummaryWidget extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 fromLocation,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 14,
-                                  color: Colors.white,
+                                  color: isPast ? Colors.white70 : Colors.white,
                                   fontWeight: FontWeight.w500,
                                 ),
                                 maxLines: 1,
@@ -153,9 +159,9 @@ class TravelRouteSummaryWidget extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 toLocation,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 14,
-                                  color: Colors.white,
+                                  color: isPast ? Colors.white70 : Colors.white,
                                   fontWeight: FontWeight.w500,
                                 ),
                                 maxLines: 1,

@@ -788,85 +788,6 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
     Future.delayed(const Duration(milliseconds: 500), () {
       _fullscreenMapController.move(widget.userLocation, 14);
     });
-    
-    // Show route selection bottom sheet if we have routes
-    if (widget.routes.isNotEmpty) {
-      Future.delayed(const Duration(milliseconds: 600), () => _showRouteSelectionSheet());
-    }
-  }
-
-  void _showRouteSelectionSheet() {
-    if (!mounted) return;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => Padding(
-        padding: const EdgeInsets.only(top: 16.0, left: 16, right: 16, bottom: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Suggested routes', style: Theme.of(context).textTheme.titleMedium),
-                IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ...widget.routes.asMap().entries.map((entry) {
-              final index = entry.key;
-              final route = entry.value;
-              final isSelected = _selectedRouteIndex == index;
-              return Card(
-                color: isSelected ? Colors.blue.shade50 : null,
-                child: ListTile(
-                  leading: const Icon(Icons.directions),
-                  title: Text(route.name),
-                  subtitle: Text(route.description),
-                  trailing: ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        _selectedRouteIndex = index;
-                      });
-                      if (widget.onRouteSelected != null) {
-                        widget.onRouteSelected!(index);
-                      }
-                      Navigator.of(context).pop();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isSelected ? Colors.blue : Colors.grey,
-                    ),
-                    child: Text(isSelected ? 'Selected' : 'Select'),
-                  ),
-                ),
-              );
-            }).toList(),
-            const SizedBox(height: 12),
-            Text('Preferences used:', style: Theme.of(context).textTheme.bodyMedium),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 8,
-              children: [
-                if (widget.preferences?.avoidClaustrophobic ?? false) Chip(label: const Text('Avoid claustrophobic')),
-                if (widget.preferences?.requireLift ?? false) Chip(label: const Text('Require lift')),
-                if (widget.preferences?.avoidStairs ?? false) Chip(label: const Text('Avoid stairs')),
-                if (widget.preferences?.wheelchairAccessible ?? false) Chip(label: const Text('Wheelchair only')),
-                if ((widget.preferences?.avoidClaustrophobic ?? false) == false && 
-                    (widget.preferences?.requireLift ?? false) == false && 
-                    (widget.preferences?.avoidStairs ?? false) == false && 
-                    (widget.preferences?.wheelchairAccessible ?? false) == false)
-                  const Text('None'),
-              ],
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
   }
 
   @override
@@ -876,24 +797,94 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
         title: const Text('Map'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
-      body: FlutterMap(
-        mapController: _fullscreenMapController,
-        options: MapOptions(
-          initialCenter: widget.userLocation,
-          initialZoom: 14,
-        ),
+      body: Stack(
         children: [
-          TileLayer(
-            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            userAgentPackageName: 'com.example.ui1',
-            maxNativeZoom: 19,
-            maxZoom: 19,
+          FlutterMap(
+            mapController: _fullscreenMapController,
+            options: MapOptions(
+              initialCenter: widget.userLocation,
+              initialZoom: 14,
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.example.ui1',
+                maxNativeZoom: 19,
+                maxZoom: 19,
+              ),
+              PolylineLayer(
+                polylines: widget.routes.map((route) => route.polyline).toList(),
+              ),
+              MarkerLayer(
+                markers: widget.markers,
+              ),
+            ],
           ),
-          PolylineLayer(
-            polylines: widget.routes.map((route) => route.polyline).toList(),
-          ),
-          MarkerLayer(
-            markers: widget.markers,
+          // Route selection overlay at bottom
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 16.0, left: 16, right: 16, bottom: 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text('Suggested routes', style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 12),
+                      ...widget.routes.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final route = entry.value;
+                        final isSelected = _selectedRouteIndex == index;
+                        return Card(
+                          color: isSelected ? Colors.blue.shade50 : null,
+                          child: ListTile(
+                            leading: const Icon(Icons.directions),
+                            title: Text(route.name),
+                            subtitle: Text(route.description),
+                            trailing: ElevatedButton(
+                              onPressed: () {
+                                setState(() {
+                                  _selectedRouteIndex = index;
+                                });
+                                if (widget.onRouteSelected != null) {
+                                  widget.onRouteSelected!(index);
+                                }
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: isSelected ? Colors.blue : Colors.grey,
+                              ),
+                              child: Text(isSelected ? 'Selected' : 'Select'),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                      const SizedBox(height: 12),
+                      Text('Preferences used:', style: Theme.of(context).textTheme.bodyMedium),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          if (widget.preferences?.avoidClaustrophobic ?? false) Chip(label: const Text('Avoid claustrophobic')),
+                          if (widget.preferences?.requireLift ?? false) Chip(label: const Text('Require lift')),
+                          if (widget.preferences?.avoidStairs ?? false) Chip(label: const Text('Avoid stairs')),
+                          if (widget.preferences?.wheelchairAccessible ?? false) Chip(label: const Text('Wheelchair only')),
+                          if ((widget.preferences?.avoidClaustrophobic ?? false) == false && 
+                              (widget.preferences?.requireLift ?? false) == false && 
+                              (widget.preferences?.avoidStairs ?? false) == false && 
+                              (widget.preferences?.wheelchairAccessible ?? false) == false)
+                            const Text('None'),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),

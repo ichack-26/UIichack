@@ -70,18 +70,12 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
       
       setState(() {
         _userLocation = LatLng(position.latitude, position.longitude);
-        _markers = [
-          Marker(
-            point: _userLocation,
-            width: 40,
-            height: 40,
-            child: const Icon(
-              Icons.my_location,
-              color: Colors.cyan,
-              size: 40,
-            ),
-          ),
-        ];
+        
+        // Set start location to user's current location
+        _fromLocation = _userLocation;
+        _fromAddress = 'Your Location (${_userLocation.latitude.toStringAsFixed(4)}, ${_userLocation.longitude.toStringAsFixed(4)})';
+        
+        _updateMarkers();
         _mapController.move(_userLocation, 14);
       });
       print('User location obtained: $_userLocation');

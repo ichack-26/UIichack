@@ -75,7 +75,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
     return 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=600&h=400&fit=crop';
   }
 
-  String _getPhotoFromRoute() {
+  Future<String> _getPhotoFromRoute() async {
     try {
       if (_routes.isEmpty || _selectedRouteIndex == null) {
         return _generateRouteImageUrl(_toAddress);
@@ -96,41 +96,69 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
       final midIndex = pointCount ~/ 2;
       final midPoint = route.polyline.points[midIndex];
 
-      // Use coordinates to deterministically pick an image
-      // This ensures each unique route gets a different but consistent image
-      final coordHash = (midPoint.latitude * 1000000).toInt().abs() + 
-                       (midPoint.longitude * 1000000).toInt().abs();
-      
-      // Curated list of high-quality travel/street images from Unsplash
-      final images = [
-        'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=600&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=600&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=600&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1444723121867-7a241cacace9?w=600&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1514565131-fce0801e5785?w=600&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=600&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=600&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1515542622106-78bda8ba0e5b?w=600&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1541417904950-b855846fe074?w=600&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?w=600&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=600&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1486299267070-83823f5448dd?w=600&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1533929736458-ca588d08c8be?w=600&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1524230572899-a752b3835840?w=600&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=600&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?w=600&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1508804185872-d7badad00f7d?w=600&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1508739773434-c26b3d09e071?w=600&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?w=600&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1534430480872-3498386e7856?w=600&h=400&fit=crop',
-      ];
+      print('Searching for photo near: ${midPoint.latitude}, ${midPoint.longitude}');
 
-      final imageIndex = coordHash % images.length;
-      print('Selected image ${imageIndex + 1} of ${images.length} for route');
-      
-      return images[imageIndex];
+      // Use Wikimedia Commons geosearch API (no key required)
+      final wikiUrl = 'https://commons.wikimedia.org/w/api.php?'
+          'action=query'
+          '&format=json'
+          '&list=geosearch'
+          '&gscoord=${midPoint.latitude}|${midPoint.longitude}'
+          '&gsradius=1000'
+          '&gslimit=10'
+          '&gsprop=type'
+          '&gsnamespace=6';
+
+      final response = await http.get(Uri.parse(wikiUrl)).timeout(
+        const Duration(seconds: 4),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['query'] != null && data['query']['geosearch'] != null) {
+          final results = data['query']['geosearch'] as List;
+          
+          if (results.isNotEmpty) {
+            // Get a random result from the geotagged images
+            final randomIndex = DateTime.now().millisecondsSinceEpoch % results.length;
+            final pageId = results[randomIndex]['pageid'];
+            
+            // Get the image URL
+            final imageInfoUrl = 'https://commons.wikimedia.org/w/api.php?'
+                'action=query'
+                '&format=json'
+                '&prop=imageinfo'
+                '&iiprop=url'
+                '&iiurlwidth=600'
+                '&pageids=$pageId';
+            
+            final imageResponse = await http.get(Uri.parse(imageInfoUrl)).timeout(
+              const Duration(seconds: 3),
+            );
+            
+            if (imageResponse.statusCode == 200) {
+              final imageData = jsonDecode(imageResponse.body);
+              if (imageData['query'] != null && imageData['query']['pages'] != null) {
+                final pages = imageData['query']['pages'];
+                final page = pages[pageId.toString()];
+                
+                if (page != null && page['imageinfo'] != null && (page['imageinfo'] as List).isNotEmpty) {
+                  final thumbUrl = page['imageinfo'][0]['thumburl'];
+                  if (thumbUrl != null) {
+                    print('Found Wikimedia photo: $thumbUrl');
+                    return thumbUrl;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      print('No geotagged photo found, using fallback');
+      return _generateRouteImageUrl(_toAddress);
     } catch (e) {
-      print('Error selecting route photo: $e');
+      print('Error fetching route photo: $e');
       return _generateRouteImageUrl(_toAddress);
     }
   }
@@ -158,8 +186,8 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
       // Generate unique ID for the journey
       final journeyId = DateTime.now().millisecondsSinceEpoch.toString();
       
-      // Get a photo based on the route coordinates
-      final imageUrl = _getPhotoFromRoute();
+      // Get a photo from the actual route location
+      final imageUrl = await _getPhotoFromRoute();
       
       // Create journey object with coordinates and route polyline
       final journey = Journey(

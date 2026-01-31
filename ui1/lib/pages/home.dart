@@ -3,6 +3,7 @@ import 'package:ui1/widgets/travel_route_summary.dart';
 import 'package:ui1/models/journey.dart';
 import 'package:ui1/pages/journey_details.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class HomePageRoute extends StatefulWidget {
@@ -27,6 +28,8 @@ class _HomePageRouteState extends State<HomePageRoute> {
   // List to hold journeys loaded from storage
   List<Journey> _allJourneys = [];
   bool _isLoading = true;
+  final Map<String, String> _locationNameCache = {};
+  bool _isResolvingLocations = false;
 
   @override
   void initState() {
@@ -38,6 +41,7 @@ class _HomePageRouteState extends State<HomePageRoute> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final journeysJson = prefs.getStringList('journeys') ?? [];
+      await _loadLocationCache(prefs);
       
       List<Journey> loadedJourneys = [];
       
@@ -63,12 +67,215 @@ class _HomePageRouteState extends State<HomePageRoute> {
         _isLoading = false;
       });
       
+      _resolveMissingLocationNames(loadedJourneys);
+      _migrateJourneysWithResolvedNames();
+
       print('Loaded ${_allJourneys.length} journeys from storage');
     } catch (e) {
       print('Error loading journeys: $e');
       setState(() {
         _isLoading = false;
       });
+    }
+  }
+
+  bool _looksLikeCoordinates(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return false;
+    if (trimmed.toLowerCase().startsWith('lat:')) return true;
+    if (trimmed.toLowerCase().contains('lng:')) return true;
+    return RegExp(r'^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$').hasMatch(trimmed);
+  }
+
+  Future<void> _migrateJourneysWithResolvedNames() async {
+    if (_allJourneys.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    bool updatedAny = false;
+    final List<Journey> updatedJourneys = [];
+
+    for (final journey in _allJourneys) {
+      String fromName = journey.from;
+      String toName = journey.to;
+
+      if (_looksLikeCoordinates(journey.from)) {
+        final resolved = await _reverseGeocode(journey.fromLat, journey.fromLng);
+        if (resolved != null && resolved.isNotEmpty) {
+          fromName = resolved;
+          updatedAny = true;
+          _locationNameCache['${journey.id}_from'] = resolved;
+          _locationNameCache['${journey.fromLat.toStringAsFixed(5)},${journey.fromLng.toStringAsFixed(5)}'] = resolved;
+          await Future.delayed(const Duration(milliseconds: 1100));
+        }
+      }
+
+      if (_looksLikeCoordinates(journey.to)) {
+        final resolved = await _reverseGeocode(journey.toLat, journey.toLng);
+        if (resolved != null && resolved.isNotEmpty) {
+          toName = resolved;
+          updatedAny = true;
+          _locationNameCache['${journey.id}_to'] = resolved;
+          _locationNameCache['${journey.toLat.toStringAsFixed(5)},${journey.toLng.toStringAsFixed(5)}'] = resolved;
+          await Future.delayed(const Duration(milliseconds: 1100));
+        }
+      }
+
+      if (fromName != journey.from || toName != journey.to) {
+        updatedJourneys.add(Journey(
+          id: journey.id,
+          date: journey.date,
+          from: fromName,
+          to: toName,
+          fromLat: journey.fromLat,
+          fromLng: journey.fromLng,
+          toLat: journey.toLat,
+          toLng: journey.toLng,
+          polylinePoints: journey.polylinePoints,
+          imageUrl: journey.imageUrl,
+          durationMinutes: journey.durationMinutes,
+        ));
+      } else {
+        updatedJourneys.add(journey);
+      }
+    }
+
+    if (updatedAny) {
+      final updatedJson = updatedJourneys.map((j) => jsonEncode(j.toJson())).toList();
+      await prefs.setStringList('journeys', updatedJson);
+      await _saveLocationCache();
+      if (mounted) {
+        setState(() {
+          _allJourneys = updatedJourneys;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadLocationCache(SharedPreferences prefs) async {
+    final cacheJson = prefs.getString('locationNameCache');
+    if (cacheJson == null || cacheJson.isEmpty) return;
+    try {
+      final decoded = jsonDecode(cacheJson) as Map<String, dynamic>;
+      decoded.forEach((key, value) {
+        if (value is String && value.isNotEmpty) {
+          _locationNameCache[key] = value;
+        }
+      });
+    } catch (_) {
+      // ignore cache load errors
+    }
+  }
+
+  Future<void> _saveLocationCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('locationNameCache', jsonEncode(_locationNameCache));
+    } catch (_) {
+      // ignore cache save errors
+    }
+  }
+
+  Future<void> _resolveMissingLocationNames(List<Journey> journeys) async {
+    if (_isResolvingLocations) return;
+    _isResolvingLocations = true;
+    try {
+      for (final journey in journeys) {
+        await _resolveLocationIfCoordinate(journey.id, journey.from, true, journey.fromLat, journey.fromLng);
+        await Future.delayed(const Duration(milliseconds: 800));
+        await _resolveLocationIfCoordinate(journey.id, journey.to, false, journey.toLat, journey.toLng);
+        await Future.delayed(const Duration(milliseconds: 800));
+      }
+    } finally {
+      _isResolvingLocations = false;
+    }
+  }
+
+  Future<void> _resolveLocationIfCoordinate(
+    String journeyId,
+    String locationValue,
+    bool isFrom,
+    double lat,
+    double lng,
+  ) async {
+    final coordKey = '${lat.toStringAsFixed(5)},${lng.toStringAsFixed(5)}';
+    final key = '${journeyId}_${isFrom ? 'from' : 'to'}';
+
+    // If the stored value already looks like a name, keep it
+    final hasLetters = RegExp(r'[A-Za-z]').hasMatch(locationValue);
+    if (hasLetters) {
+      _locationNameCache[key] = locationValue;
+      return;
+    }
+
+    final existing = _locationNameCache[key];
+    if (existing != null && RegExp(r'[A-Za-z]').hasMatch(existing)) return;
+    if (_locationNameCache.containsKey(coordKey)) {
+      _locationNameCache[key] = _locationNameCache[coordKey]!;
+      return;
+    }
+
+    final name = await _reverseGeocode(lat, lng);
+    if (!mounted) return;
+    setState(() {
+      if (name != null && name.isNotEmpty) {
+        _locationNameCache[coordKey] = name;
+        _locationNameCache[key] = name;
+        _saveLocationCache();
+      } else {
+        _locationNameCache[key] = locationValue;
+      }
+    });
+  }
+
+  Future<String?> _reverseGeocode(double lat, double lng) async {
+    try {
+      final mapsCoUrl = Uri.parse(
+        'https://geocode.maps.co/reverse?lat=$lat&lon=$lng',
+      );
+      final mapsCoResponse = await http.get(mapsCoUrl).timeout(
+        const Duration(seconds: 6),
+      );
+      if (mapsCoResponse.statusCode == 200) {
+        final data = jsonDecode(mapsCoResponse.body);
+        final address = data['address'] as Map<String, dynamic>?;
+        if (address != null) {
+          final place = address['neighbourhood'] ??
+              address['suburb'] ??
+              address['city_district'] ??
+              address['city'] ??
+              address['town'] ??
+              address['village'] ??
+              address['county'];
+          if (place != null) return place.toString();
+        }
+        final display = data['display_name'] as String?;
+        if (display != null && display.isNotEmpty) return display;
+      }
+
+      final url = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lng&zoom=14&addressdetails=1',
+      );
+      final response = await http.get(
+        url,
+        headers: {
+          'User-Agent': 'UIichack/1.0 (https://github.com/ichack-26/UIichack)',
+          'Accept-Language': 'en',
+        },
+      );
+      if (response.statusCode != 200) return null;
+      final data = jsonDecode(response.body);
+      final address = data['address'] as Map<String, dynamic>?;
+      if (address == null) return null;
+      final place = address['neighbourhood'] ??
+          address['suburb'] ??
+          address['city_district'] ??
+          address['city'] ??
+          address['town'] ??
+          address['village'] ??
+          address['county'];
+      if (place != null) return place.toString();
+      return data['display_name'] as String?;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -165,8 +372,8 @@ class _HomePageRouteState extends State<HomePageRoute> {
                       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
                       child: TravelRouteSummaryWidget(
                         travelDate: j.date,
-                        fromLocation: j.from,
-                        toLocation: j.to,
+                        fromLocation: _locationNameCache['${j.id}_from'] ?? j.from,
+                        toLocation: _locationNameCache['${j.id}_to'] ?? j.to,
                         isUpcoming: false,
                         isOngoing: true,
                         imageUrl: j.imageUrl,
@@ -220,8 +427,8 @@ class _HomePageRouteState extends State<HomePageRoute> {
                     padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
                     child: TravelRouteSummaryWidget(
                       travelDate: j.date,
-                      fromLocation: j.from,
-                      toLocation: j.to,
+                      fromLocation: _locationNameCache['${j.id}_from'] ?? j.from,
+                      toLocation: _locationNameCache['${j.id}_to'] ?? j.to,
                       isUpcoming: true,
                       imageUrl: j.imageUrl,
                       onTap: () {
@@ -274,8 +481,8 @@ class _HomePageRouteState extends State<HomePageRoute> {
                     padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
                     child: TravelRouteSummaryWidget(
                       travelDate: j.date,
-                      fromLocation: j.from,
-                      toLocation: j.to,
+                      fromLocation: _locationNameCache['${j.id}_from'] ?? j.from,
+                      toLocation: _locationNameCache['${j.id}_to'] ?? j.to,
                       isUpcoming: false,
                       imageUrl: j.imageUrl,
                       onTap: () {

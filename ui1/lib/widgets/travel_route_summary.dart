@@ -43,8 +43,7 @@ class TravelRouteSummaryWidget extends StatelessWidget {
           child: Stack(
             children: [
               // Background image
-              Container(
-                color: Colors.grey[300],
+              Positioned.fill(
                 child: Image.network(
                   imageUrl ?? 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=600&h=400&fit=crop',
                   fit: BoxFit.cover,

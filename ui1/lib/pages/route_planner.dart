@@ -641,37 +641,295 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
     });
   }
 
-  void _planRoute() {
+  Future<String?> _getPostcodeFromLatLng(double latitude, double longitude) async {
+    try {
+      print('Looking up postcode for lat=$latitude, lng=$longitude');
+      
+      // FIRST: Try reverse geocoding to get the exact address postcode
+      print('Step 1: Trying reverse geocoding for exact postcode...');
+      final reversGeoUrl = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse?format=json&lat=$latitude&lon=$longitude&zoom=18',
+      );
+      
+      final reverseResponse = await http.get(
+        reversGeoUrl,
+        headers: {'User-Agent': 'FlutterApp'},
+      ).timeout(const Duration(seconds: 10));
+      
+      if (reverseResponse.statusCode == 200) {
+        final reverseData = jsonDecode(reverseResponse.body);
+        print('Reverse geocoding response: ${reverseData['display_name']}');
+        
+        if (reverseData['address'] != null) {
+          final address = reverseData['address'];
+          
+          // Try to get postcode from address
+          final postcode = address['postcode'];
+          if (postcode != null && postcode.toString().isNotEmpty) {
+            print('✓ Got exact postcode from address: $postcode');
+            return postcode;
+          } else {
+            print('⚠ No postcode in address data');
+          }
+        }
+      }
+      
+      // SECOND: Try postcodes.io with increasing radius
+      print('Step 2: Trying postcodes.io with radius search...');
+      final radii = [100, 500, 1000, 2000];
+      
+      for (final radius in radii) {
+        final url = Uri.parse(
+          'https://api.postcodes.io/postcodes?lat=$latitude&lon=$longitude&radius=$radius&limit=1',
+        );
+        
+        final response = await http.get(url).timeout(const Duration(seconds: 10));
+        
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          
+          if (data['status'] == 200 && data['result'] != null && (data['result'] as List).isNotEmpty) {
+            final postcode = data['result'][0]['postcode'];
+            final distance = data['result'][0]['distance']?.toStringAsFixed(0) ?? '?';
+            print('✓ Got nearby postcode: $postcode (${distance}m away, radius=${radius}m)');
+            return postcode;
+          }
+        }
+      }
+      
+      // LAST RESORT: Use location name
+      print('Step 3: Last resort - using location name...');
+      if (reverseResponse.statusCode == 200) {
+        final reverseData = jsonDecode(reverseResponse.body);
+        if (reverseData['address'] != null) {
+          final address = reverseData['address'];
+          final town = address['town'] ?? address['city'] ?? address['suburb'] ?? address['village'] ?? address['county'] ?? 'Unknown';
+          print('⚠ Using location name as fallback: $town');
+          return town;
+        }
+      }
+      
+      print('✗ No postcode or location found for lat=$latitude, lng=$longitude');
+      return null;
+    } catch (e) {
+      print('✗ Error getting postcode: $e');
+      return null;
+    }
+  }
+
+  Future<void> _planRoute() async {
     if (_fromLocation == null || _toLocation == null) return;
 
-    // Generate mock routes
-    _routes = _generateMockRoutes();
-    
-    setState(() {
-      _selectedRouteIndex = 0;
-    });
-
-    // Navigate to fullscreen map with route selection
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => FullscreenMapPage(
-          markers: _markers,
-          userLocation: _userLocation,
-          routes: _routes,
-          onRouteSelected: (routeIndex) {
-            setState(() {
-              _selectedRouteIndex = routeIndex;
-              _updateRoutePolylines();
-            });
-          },
-          onContinue: _saveJourneyToStorage,
-          preferences: (
-            avoidClaustrophobic: _avoidClaustrophobic,
-            requireLift: _requireLift,
-            avoidStairs: _avoidStairs,
-            wheelchairAccessible: _wheelchairAccessible,
-          ),
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('Finding routes...'),
+          ],
         ),
+      ),
+    );
+
+    try {
+      // Convert coordinates to postcodes
+      print('Converting coordinates to postcodes...');
+      final fromPostcode = await _getPostcodeFromLatLng(
+        _fromLocation!.latitude,
+        _fromLocation!.longitude,
+      );
+      final toPostcode = await _getPostcodeFromLatLng(
+        _toLocation!.latitude,
+        _toLocation!.longitude,
+      );
+      
+      if (fromPostcode == null) {
+        throw Exception('Could not determine postcode/location for start point. Try selecting a different location.');
+      }
+      if (toPostcode == null) {
+        throw Exception('Could not determine postcode/location for destination. Try selecting a different location.');
+      }
+      
+      print('From postcode: $fromPostcode, To postcode: $toPostcode');
+      
+      // Fetch routes from backend using postcodes
+      _routes = await _fetchRoutesFromBackend(fromPostcode, toPostcode);
+      
+      if (!mounted) return;
+      Navigator.of(context).pop(); // Close loading dialog
+      
+      if (_routes.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No routes found. Please try again.')),
+        );
+        return;
+      }
+      
+      setState(() {
+        _selectedRouteIndex = 0;
+      });
+
+      // Navigate to fullscreen map with route selection
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => FullscreenMapPage(
+              markers: _markers,
+              userLocation: _userLocation,
+              routes: _routes,
+              onRouteSelected: (routeIndex) {
+                setState(() {
+                  _selectedRouteIndex = routeIndex;
+                  _updateRoutePolylines();
+                });
+              },
+              onContinue: _saveJourneyToStorage,
+              preferences: (
+                avoidClaustrophobic: _avoidClaustrophobic,
+                requireLift: _requireLift,
+                avoidStairs: _avoidStairs,
+                wheelchairAccessible: _wheelchairAccessible,
+              ),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error planning route: $e');
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  Future<List<Route>> _fetchRoutesFromBackend(String fromPostcode, String toPostcode) async {
+    try {
+      final url = Uri.parse('http://172.30.185.25:8000/route');
+
+      print("Going from $fromPostcode to $toPostcode");
+      
+      final requestBody = {
+        'origin': fromPostcode,
+        'destination': toPostcode,
+        'preferences': {
+          'avoid_crowds': _avoidClaustrophobic,
+          'avoid_noise': false, // Not exposed in UI yet
+          'avoid_heat': false, // Not exposed in UI yet
+          'prefer_buses': false, // Not exposed in UI yet
+          'minimise_changes': false, // Not exposed in UI yet
+        },
+        'travel_date': _selectedDate.toIso8601String().split('T')[0],
+        'start_time': null, // User can set this if needed
+        'arrive_by': false,
+      };
+
+      print('Sending route request to backend: $requestBody');
+
+      final response = await http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(requestBody),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      print('Backend response status: ${response.statusCode}');
+      print('Backend response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final routes = <Route>[];
+
+        // Parse primary route
+        if (data['success'] == true && data['primary_route'] != null) {
+          try {
+            final route = _parseBackendRoute(data['primary_route'], true);
+            routes.add(route);
+          } catch (e) {
+            print('Error parsing primary route: $e');
+          }
+        }
+
+        // Parse alternative route
+        if (data['alternative_route'] != null) {
+          try {
+            final route = _parseBackendRoute(data['alternative_route'], false);
+            routes.add(route);
+          } catch (e) {
+            print('Error parsing alternative route: $e');
+          }
+        }
+
+        if (routes.isEmpty) {
+          throw Exception(data['error'] ?? 'No valid routes parsed');
+        }
+
+        print('Successfully fetched ${routes.length} routes from backend');
+        return routes;
+      } else {
+        throw Exception(
+          'Backend returned ${response.statusCode}: ${response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error fetching routes from backend: $e');
+      // Fallback to mock routes if backend fails
+      print('Falling back to mock routes');
+      return _generateMockRoutes();
+    }
+  }
+
+  Route _parseBackendRoute(Map<String, dynamic> routeData, bool recommended) {
+    final List<LatLng> points = [];
+
+    // For TfL routes, we create a line between start and end
+    // as detailed turn-by-turn polylines aren't provided
+    points.add(_fromLocation!);
+    points.add(_toLocation!);
+
+    // Determine color based on recommendation
+    Color color = recommended ? Colors.blue : Colors.green;
+
+    // Build step descriptions
+    final steps = routeData['steps'] as List<dynamic>? ?? [];
+    final stepsDescription = steps
+        .map((s) => '${s['instructions']}')
+        .join(' → ')
+        .replaceAll('  ', ' ');
+
+    final durationMinutes = routeData['duration_minutes'] as int? ?? 0;
+    final numChanges = routeData['number_of_changes'] as int? ?? 0;
+
+    // Get sensory summary for description
+    final sensorySummary = routeData['sensory_summary'] as Map<String, dynamic>? ?? {};
+    final crowding = sensorySummary['crowding'] as Map<String, dynamic>? ?? {};
+
+    final descriptionParts = [
+      'Duration: ~$durationMinutes min',
+      'Changes: $numChanges',
+      'Crowding: ${crowding['level'] ?? 'Unknown'}',
+    ];
+
+    if (stepsDescription.isNotEmpty) {
+      descriptionParts.add('Route: $stepsDescription');
+    }
+
+    return Route(
+      name: recommended
+          ? 'Recommended Route'
+          : 'Alternative Route',
+      description: descriptionParts.join(' • '),
+      polyline: Polyline(
+        points: points,
+        color: color,
+        strokeWidth: 4,
       ),
     );
   }

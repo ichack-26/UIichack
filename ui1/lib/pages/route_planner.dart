@@ -76,7 +76,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
             width: 40,
             height: 40,
             child: const Icon(
-              Icons.location_on,
+              Icons.my_location,
               color: Colors.cyan,
               size: 40,
             ),
@@ -397,7 +397,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
           width: 40,
           height: 40,
           child: const Icon(
-            Icons.location_on,
+            Icons.my_location,
             color: Colors.cyan,
             size: 40,
           ),

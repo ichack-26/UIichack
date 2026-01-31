@@ -846,20 +846,14 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
                             leading: Icon(Icons.directions, color: routeColor),
                             title: Text(route.name),
                             subtitle: Text(route.description),
-                            trailing: ElevatedButton(
-                              onPressed: () {
-                                setState(() {
-                                  _selectedRouteIndex = index;
-                                });
-                                if (widget.onRouteSelected != null) {
-                                  widget.onRouteSelected!(index);
-                                }
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: isSelected ? routeColor : Colors.grey,
-                              ),
-                              child: Text(isSelected ? 'Selected' : 'Select'),
-                            ),
+                            onTap: () {
+                              setState(() {
+                                _selectedRouteIndex = index;
+                              });
+                              if (widget.onRouteSelected != null) {
+                                widget.onRouteSelected!(index);
+                              }
+                            },
                           ),
                         );
                       }).toList(),

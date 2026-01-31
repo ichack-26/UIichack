@@ -44,7 +44,8 @@ class _HomePageRouteState extends State<HomePageRoute> {
       for (String json in journeysJson) {
         try {
           final journeyData = jsonDecode(json);
-          // Only load journeys that have the new coordinate fields
+          // Load journeys that have the required coordinate fields
+          // (polylinePoints is optional for backwards compatibility)
           if (journeyData.containsKey('fromLat') && 
               journeyData.containsKey('fromLng') && 
               journeyData.containsKey('toLat') && 

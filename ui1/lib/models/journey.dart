@@ -7,6 +7,7 @@ class Journey {
   final double fromLng;
   final double toLat;
   final double toLng;
+  final List<Map<String, double>> polylinePoints; // Stores route waypoints
 
   Journey({
     required this.id,
@@ -17,6 +18,7 @@ class Journey {
     required this.fromLng,
     required this.toLat,
     required this.toLng,
+    required this.polylinePoints,
   });
 
   bool get isUpcoming => date.isAfter(DateTime.now());
@@ -32,11 +34,16 @@ class Journey {
       'fromLng': fromLng,
       'toLat': toLat,
       'toLng': toLng,
+      'polylinePoints': polylinePoints,
     };
   }
 
   // Create Journey from JSON
   factory Journey.fromJson(Map<String, dynamic> json) {
+    final pointsList = (json['polylinePoints'] as List<dynamic>?)
+        ?.map((p) => Map<String, double>.from(p as Map))
+        .toList() ?? [];
+    
     return Journey(
       id: json['id'] as String,
       date: DateTime.parse(json['date'] as String),
@@ -46,6 +53,7 @@ class Journey {
       fromLng: json['fromLng'] as double,
       toLat: json['toLat'] as double,
       toLng: json['toLng'] as double,
+      polylinePoints: pointsList,
     );
   }
 }

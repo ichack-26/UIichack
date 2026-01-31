@@ -65,7 +65,11 @@ class _JourneyDetailsPageState extends State<JourneyDetailsPage> {
               PolylineLayer(
                 polylines: [
                   Polyline(
-                    points: [_startLocation, _endLocation],
+                    points: widget.journey.polylinePoints.isNotEmpty
+                        ? widget.journey.polylinePoints
+                            .map((p) => LatLng(p['lat']!, p['lng']!))
+                            .toList()
+                        : [_startLocation, _endLocation],
                     color: Colors.blue,
                     strokeWidth: 4,
                   ),

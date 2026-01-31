@@ -51,13 +51,24 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
       return;
     }
     
+    if (_selectedRouteIndex! >= _routes.length) {
+      print('Cannot save: selected route index out of range');
+      return;
+    }
+    
     try {
       final prefs = await SharedPreferences.getInstance();
+      
+      // Get the selected route's polyline points
+      final selectedRoute = _routes[_selectedRouteIndex!];
+      final polylinePoints = selectedRoute.polyline.points
+          .map((point) => {'lat': point.latitude, 'lng': point.longitude})
+          .toList();
       
       // Generate unique ID for the journey
       final journeyId = DateTime.now().millisecondsSinceEpoch.toString();
       
-      // Create journey object with coordinates
+      // Create journey object with coordinates and route polyline
       final journey = Journey(
         id: journeyId,
         date: _selectedDate,
@@ -67,6 +78,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
         fromLng: _fromLocation!.longitude,
         toLat: _toLocation!.latitude,
         toLng: _toLocation!.longitude,
+        polylinePoints: polylinePoints,
       );
       
       // Get existing journeys
@@ -75,6 +87,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
       // Add new journey
       final jsonStr = jsonEncode(journey.toJson());
       print('Saving journey JSON: $jsonStr');
+      print('Saving route with ${polylinePoints.length} waypoints');
       journeysJson.add(jsonStr);
       
       // Save back to storage

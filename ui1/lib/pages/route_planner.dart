@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:async';
+import 'dart:math';
 import 'package:ui1/models/journey.dart';
 
 class RoutePlannerRoute extends StatefulWidget {
@@ -183,6 +184,29 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
           .map((point) => {'lat': point.latitude, 'lng': point.longitude})
           .toList();
       
+      // Calculate estimated journey duration based on walking speed (5 km/h average)
+      double totalDistance = 0;
+      for (int i = 0; i < selectedRoute.polyline.points.length - 1; i++) {
+        final p1 = selectedRoute.polyline.points[i];
+        final p2 = selectedRoute.polyline.points[i + 1];
+        final lat1 = p1.latitude * 0.017453292519943295; // to radians
+        final lat2 = p2.latitude * 0.017453292519943295;
+        final lon1 = p1.longitude * 0.017453292519943295;
+        final lon2 = p2.longitude * 0.017453292519943295;
+        
+        // Haversine formula
+        final dLat = lat2 - lat1;
+        final dLon = lon2 - lon1;
+        final a = sin(dLat / 2) * sin(dLat / 2) +
+            cos(lat1) * cos(lat2) *
+            sin(dLon / 2) * sin(dLon / 2);
+        final c = 2 * asin(sqrt(a));
+        totalDistance += 6371 * c; // Earth radius in km
+      }
+      
+      // Calculate duration: distance (km) / speed (5 km/h) * 60 = minutes
+      final durationMinutes = (totalDistance / 5 * 60).round();
+      
       // Generate unique ID for the journey
       final journeyId = DateTime.now().millisecondsSinceEpoch.toString();
       
@@ -201,6 +225,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
         toLng: _toLocation!.longitude,
         polylinePoints: polylinePoints,
         imageUrl: imageUrl,
+        durationMinutes: durationMinutes,
       );
       
       // Get existing journeys

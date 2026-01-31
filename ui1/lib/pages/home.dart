@@ -74,42 +74,95 @@ class _HomePageRouteState extends State<HomePageRoute> {
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        title: Text(
+          widget.title,
+          style: const TextStyle(
+            color: Colors.black87,
+            fontWeight: FontWeight.bold,
+            fontSize: 24,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.black87),
+            onPressed: () => _loadJourneys(),
+          ),
+        ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : Builder(builder: (context) {
-                // Journeys from storage
-                final List<Journey> all = _allJourneys;
-                final upcoming = all.where((j) => j.isUpcoming).toList()
-                  ..sort((a, b) => a.date.compareTo(b.date));
-                final history = all.where((j) => !j.isUpcoming).toList()
-                  ..sort((a, b) => b.date.compareTo(a.date));
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Builder(builder: (context) {
+              final now = DateTime.now();
+              final today = DateTime(now.year, now.month, now.day);
+              
+              // Categorize journeys
+              final List<Journey> all = _allJourneys;
+              
+              // Ongoing: journeys that started but haven't finished yet
+              final ongoing = all.where((j) => j.isOngoing).toList()
+                ..sort((a, b) => a.date.compareTo(b.date));
+              
+              // Upcoming: journeys that haven't started yet
+              final upcoming = all.where((j) => j.isUpcoming).toList()
+                ..sort((a, b) => a.date.compareTo(b.date));
+              
+              // History: journeys that have finished
+              final history = all.where((j) => j.isFinished).toList()
+                ..sort((a, b) => b.date.compareTo(a.date));
 
-                return ListView(
-                  children: [
-                    Text('Upcoming journeys', style: Theme.of(context).textTheme.titleLarge),
-                    const SizedBox(height: 8),
-                    if (upcoming.isEmpty)
-                      const Text('No upcoming journeys', style: TextStyle(color: Colors.grey)),
-                    ...upcoming.map((j) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12.0),
+              return ListView(
+                padding: const EdgeInsets.symmetric(vertical: 24.0),
+                children: [
+                  // Ongoing journeys section
+                  if (ongoing.isNotEmpty) ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 4,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Text(
+                            'Happening Today',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '${ongoing.length}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ...ongoing.map((j) => Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
                       child: TravelRouteSummaryWidget(
                         travelDate: j.date,
                         fromLocation: j.from,
@@ -125,14 +178,99 @@ class _HomePageRouteState extends State<HomePageRoute> {
                         },
                       ),
                     )),
+                    const SizedBox(height: 32),
+                  ],
+                  
+                  // Upcoming journeys section
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 4,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: Colors.blue,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'Upcoming',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (upcoming.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 20.0),
+                      child: Text(
+                        'No upcoming journeys',
+                        style: TextStyle(color: Colors.grey, fontSize: 15),
+                      ),
+                    ),
+                  ...upcoming.map((j) => Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
+                    child: TravelRouteSummaryWidget(
+                      travelDate: j.date,
+                      fromLocation: j.from,
+                      toLocation: j.to,
+                      isUpcoming: true,
+                      imageUrl: j.imageUrl,
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => JourneyDetailsPage(journey: j),
+                          ),
+                        );
+                      },
+                    ),
+                  )),
 
-              const SizedBox(height: 16),
-              Text('History', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 8),
-              if (history.isEmpty)
-                const Text('No past journeys', style: TextStyle(color: Colors.grey)),
-              ...history.map((j) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12.0),
+                  const SizedBox(height: 32),
+                  
+                  // History section
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 4,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: Colors.grey,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'History',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (history.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 20.0),
+                      child: Text(
+                        'No past journeys',
+                        style: TextStyle(color: Colors.grey, fontSize: 15),
+                      ),
+                    ),
+                  ...history.map((j) => Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
                     child: TravelRouteSummaryWidget(
                       travelDate: j.date,
                       fromLocation: j.from,
@@ -148,15 +286,10 @@ class _HomePageRouteState extends State<HomePageRoute> {
                       },
                     ),
                   )),
-            ],
-          );
+                  const SizedBox(height: 80),
+                ],
+              );
             }),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _loadJourneys(),
-        tooltip: 'Refresh',
-        child: const Icon(Icons.refresh),
-      ),
     );
   }
 }

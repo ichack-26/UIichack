@@ -9,6 +9,7 @@ class Journey {
   final double toLng;
   final List<Map<String, double>> polylinePoints; // Stores route waypoints
   final String? imageUrl; // URL to a route-relevant image
+  final int? durationMinutes; // Estimated journey duration in minutes
 
   Journey({
     required this.id,
@@ -21,9 +22,24 @@ class Journey {
     required this.toLng,
     required this.polylinePoints,
     this.imageUrl,
+    this.durationMinutes,
   });
 
   bool get isUpcoming => date.isAfter(DateTime.now());
+  
+  bool get isOngoing {
+    final now = DateTime.now();
+    if (durationMinutes == null) return false;
+    final endTime = date.add(Duration(minutes: durationMinutes!));
+    return now.isAfter(date) && now.isBefore(endTime);
+  }
+  
+  bool get isFinished {
+    final now = DateTime.now();
+    if (durationMinutes == null) return date.isBefore(now);
+    final endTime = date.add(Duration(minutes: durationMinutes!));
+    return now.isAfter(endTime);
+  }
 
   // Convert Journey to JSON
   Map<String, dynamic> toJson() {
@@ -38,6 +54,7 @@ class Journey {
       'toLng': toLng,
       'polylinePoints': polylinePoints,
       'imageUrl': imageUrl,
+      'durationMinutes': durationMinutes,
     };
   }
 
@@ -58,6 +75,7 @@ class Journey {
       toLng: json['toLng'] as double,
       polylinePoints: pointsList,
       imageUrl: json['imageUrl'] as String?,
+      durationMinutes: json['durationMinutes'] as int?,
     );
   }
 }

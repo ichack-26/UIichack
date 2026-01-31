@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 
-class RoutePlannerRoute extends StatelessWidget {
+class RoutePlannerRoute extends StatefulWidget {
   const RoutePlannerRoute({super.key});
 
+  @override
+  State<RoutePlannerRoute> createState() => _RoutePlannerRouteState();
+}
+
+class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(

@@ -167,7 +167,8 @@ class _HomePageRouteState extends State<HomePageRoute> {
                         travelDate: j.date,
                         fromLocation: j.from,
                         toLocation: j.to,
-                        isUpcoming: true,
+                        isUpcoming: false,
+                        isOngoing: true,
                         imageUrl: j.imageUrl,
                         onTap: () {
                           Navigator.of(context).push(

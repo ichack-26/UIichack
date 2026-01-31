@@ -7,6 +7,7 @@ class TravelRouteSummaryWidget extends StatelessWidget {
     required this.fromLocation,
     required this.toLocation,
     this.isUpcoming = false,
+    this.isOngoing = false,
     this.imageUrl,
     this.onTap,
   });
@@ -15,6 +16,7 @@ class TravelRouteSummaryWidget extends StatelessWidget {
   final String fromLocation;
   final String toLocation;
   final bool isUpcoming;
+  final bool isOngoing;
   final String? imageUrl;
   final VoidCallback? onTap;
 
@@ -22,6 +24,10 @@ class TravelRouteSummaryWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final dateLabel = travelDate.toLocal().toString().split(' ')[0];
     final timeLabel = '${travelDate.hour}:${travelDate.minute.toString().padLeft(2, '0')}';
+    final statusLabel = isOngoing ? 'Now' : (isUpcoming ? 'Upcoming' : 'Completed');
+    final statusColor = isOngoing
+      ? Colors.orange.withOpacity(0.85)
+      : (isUpcoming ? Colors.green.withOpacity(0.8) : Colors.grey.withOpacity(0.6));
 
     return GestureDetector(
       onTap: onTap,
@@ -103,13 +109,11 @@ class TravelRouteSummaryWidget extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                            color: isUpcoming 
-                                ? Colors.green.withOpacity(0.8)
-                                : Colors.grey.withOpacity(0.6),
+                            color: statusColor,
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
-                            isUpcoming ? 'Upcoming' : 'Completed',
+                            statusLabel,
                             style: const TextStyle(
                               fontSize: 12,
                               color: Colors.white,

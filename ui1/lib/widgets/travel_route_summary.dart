@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 class TravelRouteSummaryWidget extends StatelessWidget {
   const TravelRouteSummaryWidget({
@@ -20,9 +21,44 @@ class TravelRouteSummaryWidget extends StatelessWidget {
   final String? imageUrl;
   final VoidCallback? onTap;
 
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    final dateOnly = DateTime(date.year, date.month, date.day);
+
+    if (dateOnly == today) {
+      return 'Today';
+    } else if (dateOnly == tomorrow) {
+      return 'Tomorrow';
+    } else {
+      // Format as "26th November"
+      final day = date.day;
+      final suffix = _getDaySuffix(day);
+      final monthName = DateFormat('MMMM').format(date);
+      return '$day$suffix $monthName';
+    }
+  }
+
+  String _getDaySuffix(int day) {
+    if (day >= 11 && day <= 13) {
+      return 'th';
+    }
+    switch (day % 10) {
+      case 1:
+        return 'st';
+      case 2:
+        return 'nd';
+      case 3:
+        return 'rd';
+      default:
+        return 'th';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final dateLabel = travelDate.toLocal().toString().split(' ')[0];
+    final dateLabel = _formatDate(travelDate);
     final timeLabel = '${travelDate.hour}:${travelDate.minute.toString().padLeft(2, '0')}';
     final isPast = !isUpcoming && !isOngoing;
     final statusLabel = isOngoing ? 'Now' : (isUpcoming ? 'Upcoming' : 'Completed');

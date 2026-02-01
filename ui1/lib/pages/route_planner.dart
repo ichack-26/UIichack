@@ -17,7 +17,6 @@ class RoutePlannerRoute extends StatefulWidget {
 }
 
 class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
-  final MapController _mapController = MapController();
   final TextEditingController _searchController = TextEditingController();
   late DateTime _selectedDate;
   LatLng? _fromLocation;
@@ -25,23 +24,24 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
   String _fromAddress = '';
   String _toAddress = '';
   List<Marker> _markers = [];
-  bool _selectingStart = false;
-  bool _selectingDestination = false;
   List<SearchResult> _searchResults = [];
   bool _isSearching = false;
   Timer? _debounce;
-  LatLng _userLocation = const LatLng(37.7749, -122.4194); // Default to San Francisco
+  LatLng _userLocation = const LatLng(51.5074, -0.1278); // Default to London
 
   // User preferences
   bool _avoidClaustrophobic = false;
   bool _requireLift = false;
   bool _avoidStairs = false;
   bool _wheelchairAccessible = false;
+  bool _avoidNoise = false;
+  bool _avoidHeat = false;
+  bool _preferBuses = false;
+  bool _minimiseChanges = false;
 
   // Routes state
   List<Route> _routes = [];
   int? _selectedRouteIndex;
-  List<Polyline> _polylines = [];
 
   // UI state for collapsible preferences
   bool _prefsExpanded = false;
@@ -184,28 +184,63 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
           .map((point) => {'lat': point.latitude, 'lng': point.longitude})
           .toList();
       
-      // Calculate estimated journey duration based on walking speed (5 km/h average)
-      double totalDistance = 0;
-      for (int i = 0; i < selectedRoute.polyline.points.length - 1; i++) {
-        final p1 = selectedRoute.polyline.points[i];
-        final p2 = selectedRoute.polyline.points[i + 1];
-        final lat1 = p1.latitude * 0.017453292519943295; // to radians
-        final lat2 = p2.latitude * 0.017453292519943295;
-        final lon1 = p1.longitude * 0.017453292519943295;
-        final lon2 = p2.longitude * 0.017453292519943295;
+      // Extract steps from raw backend data
+      List<RouteStep>? routeSteps;
+      int? durationMinutes;
+      
+      if (selectedRoute.rawData != null) {
+        final rawData = selectedRoute.rawData!;
+        print('Raw backend data keys: ${rawData.keys}');
+        print('Raw backend data: ${jsonEncode(rawData)}');
         
-        // Haversine formula
-        final dLat = lat2 - lat1;
-        final dLon = lon2 - lon1;
-        final a = sin(dLat / 2) * sin(dLat / 2) +
-            cos(lat1) * cos(lat2) *
-            sin(dLon / 2) * sin(dLon / 2);
-        final c = 2 * asin(sqrt(a));
-        totalDistance += 6371 * c; // Earth radius in km
+        durationMinutes = rawData['duration_minutes'] as int?;
+        print('Duration from backend: $durationMinutes minutes');
+        
+        final stepsData = rawData['steps'] as List<dynamic>? ?? [];
+        print('Steps data from backend: ${stepsData.length} steps');
+        
+        if (stepsData.isNotEmpty) {
+          print('First step data: ${jsonEncode(stepsData[0])}');
+          routeSteps = stepsData.map((stepJson) {
+            return RouteStep(
+              mode: stepJson['mode'] as String? ?? 'walking',
+              line: stepJson['line'] as String?,
+              fromStation: stepJson['from_station'] as String? ?? '',
+              toStation: stepJson['to_station'] as String? ?? '',
+              durationMinutes: stepJson['duration_minutes'] as int? ?? 0,
+              instructions: stepJson['instructions'] as String? ?? '',
+            );
+          }).toList();
+          print('Successfully parsed ${routeSteps.length} route steps');
+        } else {
+          print('WARNING: No steps data found in backend response');
+        }
+      } else {
+        print('WARNING: selectedRoute.rawData is null');
       }
       
-      // Calculate duration: distance (km) / speed (5 km/h) * 60 = minutes
-      final durationMinutes = (totalDistance / 5 * 60).round();
+      // Fallback: Calculate duration if not from backend
+      if (durationMinutes == null) {
+        double totalDistance = 0;
+        for (int i = 0; i < selectedRoute.polyline.points.length - 1; i++) {
+          final p1 = selectedRoute.polyline.points[i];
+          final p2 = selectedRoute.polyline.points[i + 1];
+          final lat1 = p1.latitude * 0.017453292519943295; // to radians
+          final lat2 = p2.latitude * 0.017453292519943295;
+          final lon1 = p1.longitude * 0.017453292519943295;
+          final lon2 = p2.longitude * 0.017453292519943295;
+          
+          // Haversine formula
+          final dLat = lat2 - lat1;
+          final dLon = lon2 - lon1;
+          final a = sin(dLat / 2) * sin(dLat / 2) +
+              cos(lat1) * cos(lat2) *
+              sin(dLon / 2) * sin(dLon / 2);
+          final c = 2 * asin(sqrt(a));
+          totalDistance += 6371 * c; // Earth radius in km
+        }
+        durationMinutes = (totalDistance / 5 * 60).round();
+      }
       
       // Generate unique ID for the journey
       final journeyId = DateTime.now().millisecondsSinceEpoch.toString();
@@ -213,7 +248,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
       // Get a photo from the actual route location
       final imageUrl = await _getPhotoFromRoute();
       
-      // Create journey object with coordinates and route polyline
+      // Create journey object with coordinates, route polyline, and steps
       final journey = Journey(
         id: journeyId,
         date: _selectedDate,
@@ -226,15 +261,29 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
         polylinePoints: polylinePoints,
         imageUrl: imageUrl,
         durationMinutes: durationMinutes,
+        steps: routeSteps,
       );
       
       // Get existing journeys
       final journeysJson = prefs.getStringList('journeys') ?? [];
       
       // Add new journey
-      final jsonStr = jsonEncode(journey.toJson());
-      print('Saving journey JSON: $jsonStr');
-      print('Saving route with ${polylinePoints.length} waypoints');
+      final journeyJson = journey.toJson();
+      print('=== SAVING JOURNEY ===');
+      print('Journey ID: $journeyId');
+      print('Steps count: ${routeSteps?.length ?? 0}');
+      print('Steps in journeyJson: ${journeyJson['steps']?.length ?? "null"}');
+      if (routeSteps != null && routeSteps.isNotEmpty) {
+        print('First step object: mode=${routeSteps[0].mode}, instructions=${routeSteps[0].instructions}');
+        print('First step JSON: ${jsonEncode(routeSteps[0].toJson())}');
+      }
+      if (journeyJson['steps'] != null) {
+        print('First step in JSON: ${jsonEncode(journeyJson['steps'][0])}');
+      }
+      final jsonStr = jsonEncode(journeyJson);
+      print('Full JSON (first 500 chars): ${jsonStr.substring(0, jsonStr.length > 500 ? 500 : jsonStr.length)}');
+      print('Polyline points: ${polylinePoints.length}');
+      print('=====================');
       journeysJson.add(jsonStr);
       
       // Save back to storage
@@ -252,6 +301,15 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
   void initState() {
     super.initState();
     _selectedDate = DateTime.now();
+    
+    // Initialize with London as default locations
+    _fromLocation = _userLocation;
+    _fromAddress = 'Select Start Location';
+    
+    // Set a default destination (e.g., South Kensington, London)
+    _toLocation = const LatLng(51.4945, -0.1757);
+    _toAddress = 'Select Destination';
+    
     _getUserLocation();
   }
 
@@ -279,315 +337,318 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
         timeLimit: const Duration(seconds: 10),
       );
       
+      final gpsLocation = LatLng(position.latitude, position.longitude);
+      final roughLocation = await _getRoughLocationName(gpsLocation.latitude, gpsLocation.longitude);
+
+      // Always use GPS location as default start location
       setState(() {
-        _userLocation = LatLng(position.latitude, position.longitude);
-        
-        // Set start location to user's current location
-        _fromLocation = _userLocation;
-        _fromAddress = 'Your Location (${_userLocation.latitude.toStringAsFixed(4)}, ${_userLocation.longitude.toStringAsFixed(4)})';
-        
+        _userLocation = gpsLocation;
+        _fromLocation = gpsLocation;
+        _fromAddress = roughLocation;
         _updateMarkers();
-        _mapController.move(_userLocation, 14);
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          // No in-page map; map selection is handled in a separate picker.
+        }
       });
       print('User location obtained: $_userLocation');
     } catch (e) {
       print('Error getting user location: $e');
-      // Will use default San Francisco location
+      // Will use default London location
     }
   }
 
-  String get _preferencesSummary {
-    final count = [_avoidClaustrophobic, _requireLift, _avoidStairs, _wheelchairAccessible].where((v) => v).length;
-    return count == 0 ? 'None selected' : '$count selected';
+  bool _isUkLatLng(LatLng point) {
+    // Rough UK bounding box (lat: 49.8..60.9, lon: -8.6..2.1)
+    return point.latitude >= 49.8 &&
+        point.latitude <= 60.9 &&
+        point.longitude >= -8.6 &&
+        point.longitude <= 2.1;
   }
 
-  @override
+  bool _ensureUkSelection(LatLng point, bool isStart) {
+    if (_isUkLatLng(point)) {
+      return true;
+    }
+
+    final label = isStart ? 'start' : 'destination';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Please select a UK $label location.'),
+      ),
+    );
+    return false;
+  }
+
+  String get _preferencesSummary {
+    final count = [_avoidClaustrophobic, _requireLift, _avoidStairs, _wheelchairAccessible, _avoidNoise, _avoidHeat, _preferBuses, _minimiseChanges].where((v) => v).length;
+    return count == 0 ? 'None selected' : '$count selected';
+  }
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Route Planner'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
-      body: Column(
-        children: [
-          // Search and input section
-          Container(
-            padding: const EdgeInsets.all(16.0),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.2),
-                  spreadRadius: 1,
-                  blurRadius: 5,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Start Place
-                InkWell(
-                  onTap: () => _showLocationPicker(true),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.blue),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.trip_origin, color: Colors.blue),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _fromAddress.isEmpty ? 'Select Start Place' : _fromAddress,
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: _fromAddress.isEmpty ? Colors.grey : Colors.black,
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            // Search and input section
+            Container(
+              padding: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.2),
+                    spreadRadius: 1,
+                    blurRadius: 5,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Start Place
+                  InkWell(
+                    onTap: () => _showLocationPicker(true),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.blue),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.trip_origin, color: Colors.blue),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _fromAddress.isEmpty ? 'Select Start Place' : _fromAddress,
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: _fromAddress.isEmpty ? Colors.grey : Colors.black,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        const Icon(Icons.search, color: Colors.grey),
-                      ],
+                          const Icon(Icons.search, color: Colors.grey),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                // Destination Place
-                InkWell(
-                  onTap: () => _showLocationPicker(false),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.red),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.location_on, color: Colors.red),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _toAddress.isEmpty ? 'Select Destination Place' : _toAddress,
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: _toAddress.isEmpty ? Colors.grey : Colors.black,
+                  const SizedBox(height: 12),
+                  // Destination Place
+                  InkWell(
+                    onTap: () => _showLocationPicker(false),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.red),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.location_on, color: Colors.red),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _toAddress.isEmpty ? 'Select Destination Place' : _toAddress,
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: _toAddress.isEmpty ? Colors.grey : Colors.black,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        const Icon(Icons.search, color: Colors.grey),
-                      ],
+                          const Icon(Icons.search, color: Colors.grey),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                // Departure Time
-                InkWell(
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: _selectedDate,
-                      firstDate: DateTime.now(),
-                      lastDate: DateTime(2101),
-                    );
-                    if (date != null) {
-                      final time = await showTimePicker(
+                  const SizedBox(height: 12),
+                  // Departure Time
+                  InkWell(
+                    onTap: () async {
+                      final date = await showDatePicker(
                         context: context,
-                        initialTime: TimeOfDay.now(),
+                        initialDate: _selectedDate,
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime(2101),
                       );
-                      if (time != null) {
-                        setState(() {
-                          _selectedDate = DateTime(
-                            date.year,
-                            date.month,
-                            date.day,
-                            time.hour,
-                            time.minute,
-                          );
-                        });
-                      }
-                    }
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.access_time, color: Colors.grey),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            '${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year} ${_selectedDate.hour}:${_selectedDate.minute.toString().padLeft(2, '0')}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              color: Colors.black,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Collapsible Preferences
-                Theme(
-                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                  child: ExpansionTile(
-                    key: const Key('preferences_tile'),
-                    initiallyExpanded: _prefsExpanded,
-                    onExpansionChanged: (v) => setState(() => _prefsExpanded = v),
-                    leading: const Icon(Icons.filter_list),
-                    title: const Text('Preferences'),
-                    subtitle: Text(_preferencesSummary),
-                    children: [
-                      CheckboxListTile(
-                        value: _avoidClaustrophobic,
-                        onChanged: (v) => setState(() => _avoidClaustrophobic = v ?? false),
-                        title: const Text('Avoid claustrophobic areas'),
-                        subtitle: const Text('Avoid narrow tunnels or enclosed corridors'),
-                        secondary: const Icon(Icons.airline_stops_outlined),
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-
-                      CheckboxListTile(
-                        value: _requireLift,
-                        onChanged: (v) => setState(() => _requireLift = v ?? false),
-                        title: const Text('Require lift/elevator access'),
-                        subtitle: const Text('Prefer routes with elevator access'),
-                        secondary: const Icon(Icons.elevator),
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-
-                      CheckboxListTile(
-                        value: _avoidStairs,
-                        onChanged: (v) => setState(() => _avoidStairs = v ?? false),
-                        title: const Text('Avoid stairs'),
-                        subtitle: const Text('Prefer ramps and level paths'),
-                        secondary: const Icon(Icons.stairs),
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-
-                      CheckboxListTile(
-                        value: _wheelchairAccessible,
-                        onChanged: (v) => setState(() => _wheelchairAccessible = v ?? false),
-                        title: const Text('Wheelchair-accessible routes only'),
-                        subtitle: const Text('Filter to fully accessible options'),
-                        secondary: const Icon(Icons.accessible),
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-
-                      const SizedBox(height: 4),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 8),
-                // Go Button
-                ElevatedButton(
-                  onPressed: (_fromLocation != null && _toLocation != null)
-                      ? _planRoute
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey[300],
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text(
-                    'Plan Route',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Map section
-          Expanded(
-            child: Stack(
-              children: [
-                FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: _userLocation,
-                    initialZoom: 14,
-                    onTap: (tapPosition, point) {
-                      if (_selectingStart) {
-                        setState(() {
-                          _fromLocation = point;
-                          _fromAddress = 'Lat: ${point.latitude.toStringAsFixed(4)}, Lng: ${point.longitude.toStringAsFixed(4)}';
-                          _updateMarkers();
-                          _selectingStart = false;
-                        });
-                      } else if (_selectingDestination) {
-                        setState(() {
-                          _toLocation = point;
-                          _toAddress = 'Lat: ${point.latitude.toStringAsFixed(4)}, Lng: ${point.longitude.toStringAsFixed(4)}';
-                          _updateMarkers();
-                          _selectingDestination = false;
-                        });
+                      if (date != null) {
+                        final time = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay.now(),
+                        );
+                        if (time != null) {
+                          setState(() {
+                            _selectedDate = DateTime(
+                              date.year,
+                              date.month,
+                              date.day,
+                              time.hour,
+                              time.minute,
+                            );
+                          });
+                        }
                       }
                     },
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.example.ui1',
-                      maxNativeZoom: 19,
-                      maxZoom: 19,
-                    ),
-                    PolylineLayer(
-                      polylines: _polylines,
-                    ),
-                    MarkerLayer(
-                      markers: _markers,
-                    ),
-                  ],
-                ),
-                if (_selectingStart || _selectingDestination)
-                  Positioned(
-                    top: 16,
-                    left: 16,
-                    right: 16,
                     child: Container(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        border: Border.all(color: Colors.grey),
                         borderRadius: BorderRadius.circular(8),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.access_time, color: Colors.grey),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              '${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year} ${_selectedDate.hour}:${_selectedDate.minute.toString().padLeft(2, '0')}',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                color: Colors.black,
+                              ),
+                            ),
                           ),
                         ],
                       ),
-                      child: Text(
-                        _selectingStart 
-                          ? 'Tap on the map to select start location'
-                          : 'Tap on the map to select destination',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
                     ),
                   ),
-              ],
+                  const SizedBox(height: 16),
+        
+                  // Collapsible Preferences
+                  Theme(
+                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                    child: ExpansionTile(
+                      key: const Key('preferences_tile'),
+                      initiallyExpanded: _prefsExpanded,
+                      onExpansionChanged: (v) => setState(() => _prefsExpanded = v),
+                      leading: const Icon(Icons.filter_list),
+                      title: const Text('Preferences'),
+                      subtitle: Text(_preferencesSummary),
+                      children: [
+                        CheckboxListTile(
+                          value: _avoidClaustrophobic,
+                          onChanged: (v) => setState(() => _avoidClaustrophobic = v ?? false),
+                          title: const Text('Avoid claustrophobic areas'),
+                          subtitle: const Text('Avoid narrow tunnels or enclosed corridors'),
+                          secondary: const Icon(Icons.airline_stops_outlined),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+        
+                        CheckboxListTile(
+                          value: _requireLift,
+                          onChanged: (v) => setState(() => _requireLift = v ?? false),
+                          title: const Text('Require lift/elevator access'),
+                          subtitle: const Text('Prefer routes with elevator access'),
+                          secondary: const Icon(Icons.elevator),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+        
+                        CheckboxListTile(
+                          value: _avoidStairs,
+                          onChanged: (v) => setState(() => _avoidStairs = v ?? false),
+                          title: const Text('Avoid stairs'),
+                          subtitle: const Text('Prefer ramps and level paths'),
+                          secondary: const Icon(Icons.stairs),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+        
+                        CheckboxListTile(
+                          value: _wheelchairAccessible,
+                          onChanged: (v) => setState(() => _wheelchairAccessible = v ?? false),
+                          title: const Text('Wheelchair-accessible routes only'),
+                          subtitle: const Text('Filter to fully accessible options'),
+                          secondary: const Icon(Icons.accessible),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+        
+                        CheckboxListTile(
+                          value: _avoidNoise,
+                          onChanged: (v) => setState(() => _avoidNoise = v ?? false),
+                          title: const Text('Avoid noisy areas'),
+                          subtitle: const Text('Prefer quieter routes'),
+                          secondary: const Icon(Icons.volume_off),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+        
+                        CheckboxListTile(
+                          value: _avoidHeat,
+                          onChanged: (v) => setState(() => _avoidHeat = v ?? false),
+                          title: const Text('Avoid heat'),
+                          subtitle: const Text('Prefer shaded areas'),
+                          secondary: const Icon(Icons.wb_sunny),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+        
+                        CheckboxListTile(
+                          value: _preferBuses,
+                          onChanged: (v) => setState(() => _preferBuses = v ?? false),
+                          title: const Text('Prefer buses'),
+                          subtitle: const Text('Favor bus routes over other transport'),
+                          secondary: const Icon(Icons.directions_bus),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+        
+                        CheckboxListTile(
+                          value: _minimiseChanges,
+                          onChanged: (v) => setState(() => _minimiseChanges = v ?? false),
+                          title: const Text('Minimize transfers'),
+                          subtitle: const Text('Prefer routes with fewer changes'),
+                          secondary: const Icon(Icons.compare_arrows),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+        
+                        const SizedBox(height: 4),
+                      ],
+                    ),
+                  ),
+        
+                  const SizedBox(height: 8),
+                  // Go Button
+                  ElevatedButton(
+                    onPressed: (_fromLocation != null && _toLocation != null)
+                        ? _planRoute
+                        : null,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: Colors.grey[300],
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text(
+                      'Plan Route',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.map_outlined, size: 64, color: Colors.grey.shade400),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Map opens when you tap "Select from Map"',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -641,123 +702,417 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
     });
   }
 
-  void _planRoute() {
-    if (_fromLocation == null || _toLocation == null) return;
-
-    // Generate mock routes
-    _routes = _generateMockRoutes();
-    
-    setState(() {
-      _selectedRouteIndex = 0;
-    });
-
-    // Navigate to fullscreen map with route selection
-    Navigator.of(context).push(
+  Future<void> _openMapPicker(bool isStart) async {
+    final picked = await Navigator.of(context).push<LatLng>(
       MaterialPageRoute(
-        builder: (context) => FullscreenMapPage(
-          markers: _markers,
-          userLocation: _userLocation,
-          routes: _routes,
-          onRouteSelected: (routeIndex) {
-            setState(() {
-              _selectedRouteIndex = routeIndex;
-              _updateRoutePolylines();
-            });
-          },
-          onContinue: _saveJourneyToStorage,
-          preferences: (
-            avoidClaustrophobic: _avoidClaustrophobic,
-            requireLift: _requireLift,
-            avoidStairs: _avoidStairs,
-            wheelchairAccessible: _wheelchairAccessible,
-          ),
+        builder: (context) => MapPickerPage(
+          initialLocation: isStart
+              ? (_fromLocation ?? _userLocation)
+              : (_toLocation ?? _userLocation),
+          isStart: isStart,
+          existingMarkers: _markers,
         ),
       ),
     );
+
+    if (picked == null) return;
+    if (!_ensureUkSelection(picked, isStart)) return;
+
+    // Get rough location name from coordinates
+    final roughLocation = await _getRoughLocationName(picked.latitude, picked.longitude);
+
+    setState(() {
+      if (isStart) {
+        _fromLocation = picked;
+        _fromAddress = roughLocation;
+      } else {
+        _toLocation = picked;
+        _toAddress = roughLocation;
+      }
+      _updateMarkers();
+    });
   }
 
-  void _updateRoutePolylines() {
-    _polylines = [];
-    if (_selectedRouteIndex != null && _selectedRouteIndex! < _routes.length) {
-      final selectedRoute = _routes[_selectedRouteIndex!];
-      _polylines = [selectedRoute.polyline];
+  /// Reverse geocode coordinates to get rough location name using Nominatim API
+  /// Returns a human-readable location name or coordinates as fallback
+  Future<String> _getRoughLocationName(double latitude, double longitude) async {
+    try {
+      final url = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse?format=json&lat=$latitude&lon=$longitude&zoom=10&addressdetails=1',
+      );
+      
+      final response = await http.get(
+        url,
+        headers: {'User-Agent': 'FlutterApp/UIchack'},
+      ).timeout(const Duration(seconds: 5));
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final address = data['address'] as Map<String, dynamic>?;
+        
+        if (address != null) {
+          // Try to build a nice location name from address components
+          String name = '';
+          
+          // Priority order: city/town, then suburb, then county
+          if (address['city'] != null) {
+            name = address['city'];
+          } else if (address['town'] != null) {
+            name = address['town'];
+          } else if (address['village'] != null) {
+            name = address['village'];
+          } else if (address['suburb'] != null) {
+            name = address['suburb'];
+          } else if (address['county'] != null) {
+            name = address['county'];
+          }
+          
+          // Add district if available and different
+          if (address['district'] != null && address['district'] != name) {
+            if (name.isEmpty) {
+              name = address['district'];
+            } else {
+              name = '$name, ${address['district']}';
+            }
+          }
+          
+          if (name.isNotEmpty) {
+            return name;
+          }
+        }
+      }
+    } catch (e) {
+      print('Error in reverse geocoding: $e');
+    }
+    
+    // Fallback to coordinates if reverse geocoding fails
+    return '${latitude.toStringAsFixed(4)}, ${longitude.toStringAsFixed(4)}';
+  }
+
+  /// Convert UK latitude/longitude to postcode using postcodes.io API
+  /// Returns null if location is outside UK or API fails
+  Future<String?> _convertLatLngToUKPostcode(double latitude, double longitude) async {
+    try {
+      print('Converting lat=$latitude, lng=$longitude to UK postcode...');
+      
+      final url = Uri.parse(
+        'https://api.postcodes.io/postcodes?lat=$latitude&lon=$longitude&limit=1',
+      );
+      
+      final response = await http.get(url).timeout(const Duration(seconds: 8));
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        
+        // postcodes.io returns status: 200 with result: null for non-UK locations
+        if (data['status'] == 200) {
+          if (data['result'] != null && data['result'].isNotEmpty) {
+            final result = data['result'][0];
+            final postcode = result['postcode'];
+            final country = result['country'];
+            
+            print('✓ UK Postcode: $postcode (in $country)');
+            return postcode;
+          } else {
+            // No result found - location is outside UK
+            print('✗ No postcode found - location may be outside UK');
+            return null;
+          }
+        } else {
+          // Unexpected status
+          print('✗ Unexpected API status: ${data['status']}');
+          return null;
+        }
+      } else {
+        print('✗ HTTP error: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('✗ Error converting to postcode: $e');
+      return null;
     }
   }
 
-  List<Route> _generateMockRoutes() {
-    final List<Route> routes = [];
-    
-    // Route 1: Direct/Fastest route (blue)
-    routes.add(Route(
-      name: _wheelchairAccessible || _requireLift 
-        ? 'Step-free via Main Concourse'
-        : 'Fastest route via Central Stairs',
-      description: _wheelchairAccessible || _requireLift
-        ? 'Uses lifts, ramps — approx. 12 min'
-        : 'Approx. 9 min',
-      polyline: Polyline(
-        points: [
-          _fromLocation!,
-          LatLng(
-            (_fromLocation!.latitude + _toLocation!.latitude) / 2,
-            (_fromLocation!.longitude + _toLocation!.longitude) / 2,
-          ),
-          _toLocation!,
-        ],
-        color: Colors.blue,
-        strokeWidth: 4,
-      ),
-    ));
-    
-    // Route 2: Scenic route (green)
-    routes.add(Route(
-      name: 'Scenic route',
-      description: _avoidClaustrophobic
-        ? 'Through open spaces, avoiding tunnels — approx. 15 min'
-        : 'Through parks and landmarks — approx. 18 min',
-      polyline: Polyline(
-        points: [
-          _fromLocation!,
-          LatLng(
-            _fromLocation!.latitude + 0.002,
-            (_fromLocation!.longitude + _toLocation!.longitude) / 2,
-          ),
-          LatLng(
-            _toLocation!.latitude - 0.001,
-            _toLocation!.longitude,
-          ),
-          _toLocation!,
-        ],
-        color: Colors.green,
-        strokeWidth: 4,
-      ),
-    ));
-    
-    // Route 3: Accessible route (orange)
-    routes.add(Route(
-      name: 'Accessible route',
-      description: _avoidStairs
-        ? 'Stairs-free, elevators and ramps only — approx. 15 min'
-        : 'Wheelchair friendly, no major obstacles — approx. 14 min',
-      polyline: Polyline(
-        points: [
-          _fromLocation!,
-          LatLng(
-            _fromLocation!.latitude - 0.002,
-            (_fromLocation!.longitude + _toLocation!.longitude) / 2,
-          ),
-          LatLng(
-            _toLocation!.latitude + 0.001,
-            _toLocation!.longitude,
-          ),
-          _toLocation!,
-        ],
-        color: Colors.orange,
-        strokeWidth: 4,
-      ),
-    ));
 
-    return routes;
+  Future<void> _planRoute() async {
+    if (_fromLocation == null || _toLocation == null) return;
+
+    if (!_isUkLatLng(_fromLocation!) || !_isUkLatLng(_toLocation!)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select UK locations for both start and destination.')),
+      );
+      return;
+    }
+
+    print('DEBUG: From location = ${_fromLocation!.latitude}, ${_fromLocation!.longitude}');
+    print('DEBUG: To location = ${_toLocation!.latitude}, ${_toLocation!.longitude}');
+
+    // Show loading dialog
+    var dialogOpen = true;
+    final rootNavigator = Navigator.of(context, rootNavigator: true);
+    showDialog(
+      context: context,
+      useRootNavigator: true,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('Finding routes...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      // Convert coordinates to postcodes
+      print('Converting coordinates to postcodes...');
+      final fromPostcode = await _convertLatLngToUKPostcode(
+        _fromLocation!.latitude,
+        _fromLocation!.longitude,
+      );
+      final toPostcode = await _convertLatLngToUKPostcode(
+        _toLocation!.latitude,
+        _toLocation!.longitude,
+      );
+      
+      if (fromPostcode == null) {
+        throw Exception('Could not convert start location to UK postcode. Please use the search function.');
+      }
+      if (toPostcode == null) {
+        throw Exception('Could not convert destination to UK postcode. Please use the search function.');
+      }
+      
+      print('Route: $fromPostcode → $toPostcode');
+      
+      // Fetch routes from backend using postcodes
+      _routes = await _fetchRoutesFromBackend(fromPostcode, toPostcode);
+      
+      if (!mounted) return;
+      rootNavigator.pop(); // Close loading dialog
+      dialogOpen = false;
+      
+      if (_routes.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No routes found. Please try again.')),
+        );
+        return;
+      }
+      
+      setState(() {
+        _selectedRouteIndex = 0;
+      });
+
+      // Navigate to fullscreen map with route selection
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => FullscreenMapPage(
+              markers: _markers,
+              userLocation: _userLocation,
+              routes: _routes,
+              onRouteSelected: (routeIndex) {
+                setState(() {
+                  _selectedRouteIndex = routeIndex;
+                });
+              },
+              onContinue: _saveJourneyToStorage,
+              preferences: (
+                avoidClaustrophobic: _avoidClaustrophobic,
+                requireLift: _requireLift,
+                avoidStairs: _avoidStairs,
+                wheelchairAccessible: _wheelchairAccessible,
+                avoidNoise: _avoidNoise,
+                avoidHeat: _avoidHeat,
+                preferBuses: _preferBuses,
+                minimiseChanges: _minimiseChanges,
+              ),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error planning route: $e');
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => RouteErrorPage(
+              message: e.toString(),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (dialogOpen && mounted && rootNavigator.canPop()) {
+        rootNavigator.pop();
+      }
+    }
+  }
+
+  Future<List<Route>> _fetchRoutesFromBackend(String fromPostcode, String toPostcode) async {
+    try {
+      final url = Uri.parse('http://172.30.111.204:8000/route');
+
+      print("Going from $fromPostcode to $toPostcode");
+      
+      final requestBody = {
+        'origin': fromPostcode,
+        'destination': toPostcode,
+        'preferences': {
+          'avoid_crowds': _avoidClaustrophobic,
+          'avoid_noise': _avoidNoise,
+          'avoid_heat': _avoidHeat,
+          'prefer_buses': _preferBuses,
+          'minimise_changes': _minimiseChanges,
+          'wheelchair_accessible': _wheelchairAccessible,
+          'avoid_stairs': _avoidStairs,
+        },
+        'travel_date': _selectedDate.toIso8601String().split('T')[0],
+        'start_time': '${_selectedDate.hour.toString().padLeft(2, '0')}:${_selectedDate.minute.toString().padLeft(2, '0')}',
+        'arrive_by': false,
+      };
+
+      print('Sending route request to backend: $requestBody');
+      print('Preferences: avoid_crowds=$_avoidClaustrophobic, avoid_noise=$_avoidNoise, avoid_heat=$_avoidHeat, prefer_buses=$_preferBuses, minimise_changes=$_minimiseChanges, wheelchair_accessible=$_wheelchairAccessible, avoid_stairs=$_avoidStairs');
+      print('Formatted travel_date: ${_selectedDate.toIso8601String().split('T')[0]}');
+      print('Formatted start_time: ${_selectedDate.hour.toString().padLeft(2, '0')}:${_selectedDate.minute.toString().padLeft(2, '0')}');
+
+      final response = await http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(requestBody),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      print('Backend response status: ${response.statusCode}');
+      print('Backend response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final routes = <Route>[];
+
+        // Parse primary route
+        if (data['success'] == true && data['primary_route'] != null) {
+          try {
+            final route = _parseBackendRoute(data['primary_route'], true);
+            routes.add(route);
+          } catch (e) {
+            print('Error parsing primary route: $e');
+          }
+        }
+
+        // Parse alternative route
+        if (data['alternative_route'] != null) {
+          try {
+            final route = _parseBackendRoute(data['alternative_route'], false);
+            routes.add(route);
+          } catch (e) {
+            print('Error parsing alternative route: $e');
+          }
+        }
+
+        if (routes.isEmpty) {
+          throw Exception(data['error'] ?? 'No valid routes parsed');
+        }
+
+        print('Successfully fetched ${routes.length} routes from backend');
+        return routes;
+      } else {
+        throw Exception(
+          'Backend returned ${response.statusCode}: ${response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error fetching routes from backend: $e');
+      throw Exception('Failed to load routes. Please try again.');
+    }
+  }
+
+  Route _parseBackendRoute(Map<String, dynamic> routeData, bool recommended) {
+    final List<LatLng> points = [];
+
+    // Prefer detailed step paths if provided by backend
+    final steps = routeData['steps'] as List<dynamic>? ?? [];
+    for (final step in steps) {
+      final path = (step as Map<String, dynamic>)['path'] as List<dynamic>? ?? [];
+      for (final p in path) {
+        if (p is Map<String, dynamic>) {
+          final lat = p['lat'];
+          final lng = p['lng'];
+          if (lat is num && lng is num) {
+            final latVal = lat.toDouble();
+            final lngVal = lng.toDouble();
+            // Backend may send lat/lng swapped; detect UK lat/lng and fix
+            if (latVal.abs() <= 3 && lngVal.abs() >= 49) {
+              points.add(LatLng(lngVal, latVal));
+            } else {
+              points.add(LatLng(latVal, lngVal));
+            }
+          }
+        }
+      }
+    }
+
+    // Use backend-provided polyline coordinates when available
+    if (points.isEmpty) {
+      final polylineCoords = routeData['polyline_coords'] as List<dynamic>? ?? [];
+      for (final coord in polylineCoords) {
+        if (coord is List && coord.length >= 2) {
+          final lat = coord[0];
+          final lon = coord[1];
+          if (lat is num && lon is num) {
+            points.add(LatLng(lat.toDouble(), lon.toDouble()));
+          }
+        }
+      }
+    }
+
+    // Fallback: straight line if no geometry provided
+    if (points.isEmpty) {
+      points.add(_fromLocation!);
+      points.add(_toLocation!);
+    }
+
+    // Determine color based on recommendation
+    Color color = recommended ? Colors.blue : Colors.green;
+
+    // Build step descriptions
+    final stepsDescription = steps
+        .map((s) => '${s['instructions']}')
+        .join(' → ')
+        .replaceAll('  ', ' ');
+
+    final durationMinutes = routeData['duration_minutes'] as int? ?? 0;
+    final numChanges = routeData['number_of_changes'] as int? ?? 0;
+
+    // Get sensory summary for description
+    final sensorySummary = routeData['sensory_summary'] as Map<String, dynamic>? ?? {};
+    final crowding = sensorySummary['crowding'] as Map<String, dynamic>? ?? {};
+
+    final descriptionParts = [
+      'Duration: ~$durationMinutes min',
+      'Changes: $numChanges',
+      'Crowding: ${crowding['level'] ?? 'Unknown'}',
+    ];
+
+    if (stepsDescription.isNotEmpty) {
+      descriptionParts.add('Route: $stepsDescription');
+    }
+
+    return Route(
+      name: recommended
+          ? 'Recommended Route'
+          : 'Alternative Route',
+      description: descriptionParts.join(' • '),
+      polyline: Polyline(
+        points: points,
+        color: color,
+        strokeWidth: 4,
+      ),
+      rawData: routeData, // Store raw backend data
+    );
   }
 
   Future<void> _searchPlaces(String query) async {
@@ -834,32 +1189,83 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                   ),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[400],
-                          borderRadius: BorderRadius.circular(2),
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[400],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      Text(
-                        isStart ? 'Select Start Location' : 'Select Destination',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 16,
+                            backgroundColor: isStart ? Colors.blue : Colors.red,
+                            child: Icon(
+                              isStart ? Icons.trip_origin : Icons.location_on,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  isStart ? 'Select Start Location' : 'Select Destination',
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'UK locations only',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
                       TextField(
                         controller: _searchController,
                         decoration: InputDecoration(
-                          hintText: 'Search for a place',
+                          hintText: 'Search for a place or postcode',
+                          filled: true,
+                          fillColor: Colors.white,
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
                           ),
                           prefixIcon: const Icon(Icons.search),
+                          suffixIcon: _searchController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setModalState(() {
+                                      _searchResults = [];
+                                      _isSearching = false;
+                                    });
+                                  },
+                                )
+                              : null,
                         ),
                         onChanged: (value) {
                           _searchPlaces(value).then((_) {
@@ -882,27 +1288,47 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                       itemCount: _searchResults.length,
                       itemBuilder: (context, index) {
                         final result = _searchResults[index];
-                        return ListTile(
-                          leading: Icon(
-                            Icons.location_on,
-                            color: isStart ? Colors.blue : Colors.red,
+                        return Card(
+                          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          title: Text(result.displayName),
-                          onTap: () {
-                            setState(() {
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: (isStart ? Colors.blue : Colors.red).withAlpha(30),
+                              child: Icon(
+                                Icons.location_on,
+                                color: isStart ? Colors.blue : Colors.red,
+                              ),
+                            ),
+                            title: Text(
+                              result.displayName,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              '${result.lat.toStringAsFixed(4)}, ${result.lon.toStringAsFixed(4)}',
+                              style: TextStyle(color: Colors.grey[600]),
+                            ),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () {
                               final location = LatLng(result.lat, result.lon);
-                              if (isStart) {
-                                _fromLocation = location;
-                                _fromAddress = result.displayName;
-                              } else {
-                                _toLocation = location;
-                                _toAddress = result.displayName;
+                              if (!_ensureUkSelection(location, isStart)) {
+                                return;
                               }
-                              _updateMarkers();
-                            });
-                            _mapController.move(LatLng(result.lat, result.lon), 14);
-                            Navigator.of(context).pop();
-                          },
+                              setState(() {
+                                if (isStart) {
+                                  _fromLocation = location;
+                                  _fromAddress = result.displayName;
+                                } else {
+                                  _toLocation = location;
+                                  _toAddress = result.displayName;
+                                }
+                                _updateMarkers();
+                              });
+                              Navigator.of(context).pop();
+                            },
+                          ),
                         );
                       },
                     ),
@@ -913,31 +1339,33 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                       const Padding(
                         padding: EdgeInsets.all(16.0),
                         child: Text(
-                          'Search for a place or tap the button below to select from map',
+                          'Search for a place or pick directly on the map',
                           style: TextStyle(color: Colors.grey),
                           textAlign: TextAlign.center,
                         ),
                       ),
-                      ElevatedButton.icon(
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
                         onPressed: () {
                           Navigator.of(context).pop();
-                          // Use Future.delayed to ensure modal is fully closed
                           Future.delayed(const Duration(milliseconds: 100), () {
                             if (mounted) {
-                              setState(() {
-                                if (isStart) {
-                                  _selectingStart = true;
-                                } else {
-                                  _selectingDestination = true;
-                                }
-                              });
+                              _openMapPicker(isStart);
                             }
                           });
                         },
                         icon: const Icon(Icons.map),
                         label: const Text('Select from Map'),
                         style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            backgroundColor: Colors.blue.withAlpha(230),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                        ),
                         ),
                       ),
                     ],
@@ -965,7 +1393,16 @@ class FullscreenMapPage extends StatefulWidget {
   final List<Route> routes;
   final Function(int)? onRouteSelected;
   final Future<void> Function()? onContinue;
-  final ({bool avoidClaustrophobic, bool requireLift, bool avoidStairs, bool wheelchairAccessible})? preferences;
+  final ({
+    bool avoidClaustrophobic,
+    bool requireLift,
+    bool avoidStairs,
+    bool wheelchairAccessible,
+    bool avoidNoise,
+    bool avoidHeat,
+    bool preferBuses,
+    bool minimiseChanges,
+  })? preferences;
 
   const FullscreenMapPage({
     required this.markers,
@@ -984,13 +1421,30 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
   late MapController _fullscreenMapController;
   int? _selectedRouteIndex = 0;
 
+  void _fitToRoute(int index) {
+    if (index < 0 || index >= widget.routes.length) return;
+    final points = widget.routes[index].polyline.points;
+    if (points.isEmpty) {
+      _fullscreenMapController.move(widget.userLocation, 14);
+      return;
+    }
+
+    final bounds = LatLngBounds.fromPoints(points);
+    _fullscreenMapController.fitCamera(
+      CameraFit.bounds(
+        bounds: bounds,
+        padding: const EdgeInsets.all(48),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
     _fullscreenMapController = MapController();
-    // Center the map at the user's location
     Future.delayed(const Duration(milliseconds: 500), () {
-      _fullscreenMapController.move(widget.userLocation, 14);
+      final initialIndex = _selectedRouteIndex ?? 0;
+      _fitToRoute(initialIndex);
     });
   }
 
@@ -1024,76 +1478,176 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
               ),
             ],
           ),
-          // Route selection overlay at bottom
           Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(
-              color: Theme.of(context).scaffoldBackgroundColor,
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 16.0, left: 16, right: 16, bottom: 24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text('Suggested routes', style: Theme.of(context).textTheme.titleMedium),
+            left: 16,
+            right: 16,
+            bottom: 12,
+            child: SafeArea(
+              top: false,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.92),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: SizedBox(
+                    height: 300,
+                    child: ListView(
+                      padding: const EdgeInsets.only(top: 8.0, left: 16, right: 16, bottom: 16),
+                      children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[400],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Suggested routes', style: Theme.of(context).textTheme.titleMedium),
+                          Text('${widget.routes.length} options', style: Theme.of(context).textTheme.bodySmall),
+                        ],
+                      ),
                       const SizedBox(height: 12),
                       ...widget.routes.asMap().entries.map((entry) {
                         final index = entry.key;
                         final route = entry.value;
                         final isSelected = _selectedRouteIndex == index;
                         final routeColor = route.polyline.color;
-                        return Card(
-                          color: isSelected ? routeColor.withAlpha(51) : null,
-                          child: ListTile(
-                            leading: Icon(Icons.directions, color: routeColor),
-                            title: Text(route.name),
-                            subtitle: Text(route.description),
-                            onTap: () {
-                              setState(() {
-                                _selectedRouteIndex = index;
-                              });
-                              if (widget.onRouteSelected != null) {
-                                widget.onRouteSelected!(index);
-                              }
-                            },
+
+                        return InkWell(
+                          onTap: () {
+                            setState(() {
+                              _selectedRouteIndex = index;
+                            });
+                            _fitToRoute(index);
+                            if (widget.onRouteSelected != null) {
+                              widget.onRouteSelected!(index);
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: isSelected ? routeColor.withAlpha(26) : Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isSelected ? routeColor : Colors.grey.shade200,
+                                width: isSelected ? 2 : 1,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.04),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    color: routeColor,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              route.name,
+                                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                            ),
+                                          ),
+                                          if (isSelected)
+                                            Icon(Icons.check_circle, color: routeColor, size: 20),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        route.description,
+                                        style: Theme.of(context).textTheme.bodySmall,
+                                        maxLines: 3,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         );
                       }).toList(),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       Text('Preferences used:', style: Theme.of(context).textTheme.bodyMedium),
                       const SizedBox(height: 6),
                       Wrap(
                         spacing: 8,
+                        runSpacing: 6,
                         children: [
                           if (widget.preferences?.avoidClaustrophobic ?? false) Chip(label: const Text('Avoid claustrophobic')),
                           if (widget.preferences?.requireLift ?? false) Chip(label: const Text('Require lift')),
                           if (widget.preferences?.avoidStairs ?? false) Chip(label: const Text('Avoid stairs')),
                           if (widget.preferences?.wheelchairAccessible ?? false) Chip(label: const Text('Wheelchair only')),
-                          if ((widget.preferences?.avoidClaustrophobic ?? false) == false && 
-                              (widget.preferences?.requireLift ?? false) == false && 
-                              (widget.preferences?.avoidStairs ?? false) == false && 
-                              (widget.preferences?.wheelchairAccessible ?? false) == false)
-                            const Text('None'),
+                          if (widget.preferences?.avoidNoise ?? false) Chip(label: const Text('Avoid noise')),
+                          if (widget.preferences?.avoidHeat ?? false) Chip(label: const Text('Avoid heat')),
+                          if (widget.preferences?.preferBuses ?? false) Chip(label: const Text('Prefer buses')),
+                          if (widget.preferences?.minimiseChanges ?? false) Chip(label: const Text('Minimise changes')),
+                          if ((widget.preferences?.avoidClaustrophobic ?? false) == false &&
+                              (widget.preferences?.requireLift ?? false) == false &&
+                              (widget.preferences?.avoidStairs ?? false) == false &&
+                              (widget.preferences?.wheelchairAccessible ?? false) == false &&
+                              (widget.preferences?.avoidNoise ?? false) == false &&
+                              (widget.preferences?.avoidHeat ?? false) == false &&
+                              (widget.preferences?.preferBuses ?? false) == false &&
+                              (widget.preferences?.minimiseChanges ?? false) == false)
+                            const Chip(label: Text('None')),
                         ],
                       ),
                       const SizedBox(height: 16),
-                      ElevatedButton(
+                      ElevatedButton.icon(
                         onPressed: () async {
-                          // Save the journey to persistent storage
                           if (widget.onContinue != null) {
                             await widget.onContinue!();
                           }
-                          Navigator.of(context).pop(); // Close fullscreen map
+                          Navigator.of(context).pop();
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.blue,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
-                        child: const Text('Continue'),
+                        icon: const Icon(Icons.check_circle_outline),
+                        label: const Text('Use selected route'),
                       ),
                     ],
+                  ),
                   ),
                 ),
               ),
@@ -1125,14 +1679,126 @@ class SearchResult {
   }
 }
 
+class RouteErrorPage extends StatelessWidget {
+  final String message;
+
+  const RouteErrorPage({
+    super.key,
+    required this.message,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Route Error'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, size: 64, color: Colors.redAccent),
+              const SizedBox(height: 12),
+              const Text(
+                'Unable to load routes',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                message,
+                style: TextStyle(color: Colors.grey.shade700),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.arrow_back),
+                label: const Text('Back'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class MapPickerPage extends StatefulWidget {
+  final LatLng initialLocation;
+  final bool isStart;
+  final List<Marker> existingMarkers;
+
+  const MapPickerPage({
+    super.key,
+    required this.initialLocation,
+    required this.isStart,
+    required this.existingMarkers,
+  });
+
+  @override
+  State<MapPickerPage> createState() => _MapPickerPageState();
+}
+
+class _MapPickerPageState extends State<MapPickerPage> {
+  late final MapController _pickerMapController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pickerMapController = MapController();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _pickerMapController.move(widget.initialLocation, 14);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.isStart ? 'Select Start on Map' : 'Select Destination on Map'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+      ),
+      body: FlutterMap(
+        mapController: _pickerMapController,
+        options: MapOptions(
+          initialCenter: widget.initialLocation,
+          initialZoom: 14,
+          onTap: (tapPosition, point) {
+            Navigator.of(context).pop(point);
+          },
+        ),
+        children: [
+          TileLayer(
+            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            userAgentPackageName: 'com.example.ui1',
+            maxNativeZoom: 19,
+            maxZoom: 19,
+          ),
+          MarkerLayer(markers: widget.existingMarkers),
+        ],
+      ),
+    );
+  }
+}
+
 class Route {
   final String name;
   final String description;
   final Polyline polyline;
+  final Map<String, dynamic>? rawData; // Store raw backend data including steps
 
   Route({
     required this.name,
     required this.description,
     required this.polyline,
+    this.rawData,
   });
 }

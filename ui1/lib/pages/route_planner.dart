@@ -338,12 +338,13 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
       );
       
       final gpsLocation = LatLng(position.latitude, position.longitude);
+      final roughLocation = await _getRoughLocationName(gpsLocation.latitude, gpsLocation.longitude);
 
       // Always use GPS location as default start location
       setState(() {
         _userLocation = gpsLocation;
         _fromLocation = gpsLocation;
-        _fromAddress = 'Your Location (${gpsLocation.latitude.toStringAsFixed(4)}, ${gpsLocation.longitude.toStringAsFixed(4)})';
+        _fromAddress = roughLocation;
         _updateMarkers();
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -715,16 +716,75 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
     if (picked == null) return;
     if (!_ensureUkSelection(picked, isStart)) return;
 
+    // Get rough location name from coordinates
+    final roughLocation = await _getRoughLocationName(picked.latitude, picked.longitude);
+
     setState(() {
       if (isStart) {
         _fromLocation = picked;
-        _fromAddress = 'Lat: ${picked.latitude.toStringAsFixed(4)}, Lng: ${picked.longitude.toStringAsFixed(4)}';
+        _fromAddress = roughLocation;
       } else {
         _toLocation = picked;
-        _toAddress = 'Lat: ${picked.latitude.toStringAsFixed(4)}, Lng: ${picked.longitude.toStringAsFixed(4)}';
+        _toAddress = roughLocation;
       }
       _updateMarkers();
     });
+  }
+
+  /// Reverse geocode coordinates to get rough location name using Nominatim API
+  /// Returns a human-readable location name or coordinates as fallback
+  Future<String> _getRoughLocationName(double latitude, double longitude) async {
+    try {
+      final url = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse?format=json&lat=$latitude&lon=$longitude&zoom=10&addressdetails=1',
+      );
+      
+      final response = await http.get(
+        url,
+        headers: {'User-Agent': 'FlutterApp/UIchack'},
+      ).timeout(const Duration(seconds: 5));
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final address = data['address'] as Map<String, dynamic>?;
+        
+        if (address != null) {
+          // Try to build a nice location name from address components
+          String name = '';
+          
+          // Priority order: city/town, then suburb, then county
+          if (address['city'] != null) {
+            name = address['city'];
+          } else if (address['town'] != null) {
+            name = address['town'];
+          } else if (address['village'] != null) {
+            name = address['village'];
+          } else if (address['suburb'] != null) {
+            name = address['suburb'];
+          } else if (address['county'] != null) {
+            name = address['county'];
+          }
+          
+          // Add district if available and different
+          if (address['district'] != null && address['district'] != name) {
+            if (name.isEmpty) {
+              name = address['district'];
+            } else {
+              name = '$name, ${address['district']}';
+            }
+          }
+          
+          if (name.isNotEmpty) {
+            return name;
+          }
+        }
+      }
+    } catch (e) {
+      print('Error in reverse geocoding: $e');
+    }
+    
+    // Fallback to coordinates if reverse geocoding fails
+    return '${latitude.toStringAsFixed(4)}, ${longitude.toStringAsFixed(4)}';
   }
 
   /// Convert UK latitude/longitude to postcode using postcodes.io API

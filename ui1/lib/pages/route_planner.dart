@@ -904,6 +904,10 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                 requireLift: _requireLift,
                 avoidStairs: _avoidStairs,
                 wheelchairAccessible: _wheelchairAccessible,
+                avoidNoise: _avoidNoise,
+                avoidHeat: _avoidHeat,
+                preferBuses: _preferBuses,
+                minimiseChanges: _minimiseChanges,
               ),
             ),
           ),
@@ -1460,7 +1464,16 @@ class FullscreenMapPage extends StatefulWidget {
   final List<Route> routes;
   final Function(int)? onRouteSelected;
   final Future<void> Function()? onContinue;
-  final ({bool avoidClaustrophobic, bool requireLift, bool avoidStairs, bool wheelchairAccessible})? preferences;
+  final ({
+    bool avoidClaustrophobic,
+    bool requireLift,
+    bool avoidStairs,
+    bool wheelchairAccessible,
+    bool avoidNoise,
+    bool avoidHeat,
+    bool preferBuses,
+    bool minimiseChanges,
+  })? preferences;
 
   const FullscreenMapPage({
     required this.markers,
@@ -1646,10 +1659,18 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
                               if (widget.preferences?.requireLift ?? false) Chip(label: const Text('Require lift')),
                               if (widget.preferences?.avoidStairs ?? false) Chip(label: const Text('Avoid stairs')),
                               if (widget.preferences?.wheelchairAccessible ?? false) Chip(label: const Text('Wheelchair only')),
+                              if (widget.preferences?.avoidNoise ?? false) Chip(label: const Text('Avoid noise')),
+                              if (widget.preferences?.avoidHeat ?? false) Chip(label: const Text('Avoid heat')),
+                              if (widget.preferences?.preferBuses ?? false) Chip(label: const Text('Prefer buses')),
+                              if (widget.preferences?.minimiseChanges ?? false) Chip(label: const Text('Minimise changes')),
                               if ((widget.preferences?.avoidClaustrophobic ?? false) == false &&
                                   (widget.preferences?.requireLift ?? false) == false &&
                                   (widget.preferences?.avoidStairs ?? false) == false &&
-                                  (widget.preferences?.wheelchairAccessible ?? false) == false)
+                                  (widget.preferences?.wheelchairAccessible ?? false) == false &&
+                                  (widget.preferences?.avoidNoise ?? false) == false &&
+                                  (widget.preferences?.avoidHeat ?? false) == false &&
+                                  (widget.preferences?.preferBuses ?? false) == false &&
+                                  (widget.preferences?.minimiseChanges ?? false) == false)
                                 const Chip(label: Text('None')),
                             ],
                           ),

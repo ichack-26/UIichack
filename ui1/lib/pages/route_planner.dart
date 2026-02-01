@@ -933,8 +933,12 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
     } catch (e) {
       print('Error planning route: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => RouteErrorPage(
+              message: e.toString(),
+            ),
+          ),
         );
       }
     } finally {
@@ -1020,9 +1024,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
       }
     } catch (e) {
       print('Error fetching routes from backend: $e');
-      // Fallback to mock routes if backend fails
-      print('Falling back to mock routes');
-      return _generateMockRoutes();
+      throw Exception('Failed to load routes. Please try again.');
     }
   }
 
@@ -1109,82 +1111,6 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
       ),
       rawData: routeData, // Store raw backend data
     );
-  }
-
-  List<Route> _generateMockRoutes() {
-    final List<Route> routes = [];
-    
-    // Route 1: Direct/Fastest route (blue)
-    routes.add(Route(
-      name: _wheelchairAccessible || _requireLift 
-        ? 'Step-free via Main Concourse'
-        : 'Fastest route via Central Stairs',
-      description: _wheelchairAccessible || _requireLift
-        ? 'Uses lifts, ramps — approx. 12 min'
-        : 'Approx. 9 min',
-      polyline: Polyline(
-        points: [
-          _fromLocation!,
-          LatLng(
-            (_fromLocation!.latitude + _toLocation!.latitude) / 2,
-            (_fromLocation!.longitude + _toLocation!.longitude) / 2,
-          ),
-          _toLocation!,
-        ],
-        color: Colors.blue,
-        strokeWidth: 4,
-      ),
-    ));
-    
-    // Route 2: Scenic route (green)
-    routes.add(Route(
-      name: 'Scenic route',
-      description: _avoidClaustrophobic
-        ? 'Through open spaces, avoiding tunnels — approx. 15 min'
-        : 'Through parks and landmarks — approx. 18 min',
-      polyline: Polyline(
-        points: [
-          _fromLocation!,
-          LatLng(
-            _fromLocation!.latitude + 0.002,
-            (_fromLocation!.longitude + _toLocation!.longitude) / 2,
-          ),
-          LatLng(
-            _toLocation!.latitude - 0.001,
-            _toLocation!.longitude,
-          ),
-          _toLocation!,
-        ],
-        color: Colors.green,
-        strokeWidth: 4,
-      ),
-    ));
-    
-    // Route 3: Accessible route (orange)
-    routes.add(Route(
-      name: 'Accessible route',
-      description: _avoidStairs
-        ? 'Stairs-free, elevators and ramps only — approx. 15 min'
-        : 'Wheelchair friendly, no major obstacles — approx. 14 min',
-      polyline: Polyline(
-        points: [
-          _fromLocation!,
-          LatLng(
-            _fromLocation!.latitude - 0.002,
-            (_fromLocation!.longitude + _toLocation!.longitude) / 2,
-          ),
-          LatLng(
-            _toLocation!.latitude + 0.001,
-            _toLocation!.longitude,
-          ),
-          _toLocation!,
-        ],
-        color: Colors.orange,
-        strokeWidth: 4,
-      ),
-    ));
-
-    return routes;
   }
 
   Future<void> _searchPlaces(String query) async {
@@ -1729,6 +1655,58 @@ class SearchResult {
       displayName: json['display_name'] as String,
       lat: double.parse(json['lat'] as String),
       lon: double.parse(json['lon'] as String),
+    );
+  }
+}
+
+class RouteErrorPage extends StatelessWidget {
+  final String message;
+
+  const RouteErrorPage({
+    super.key,
+    required this.message,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Route Error'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, size: 64, color: Colors.redAccent),
+              const SizedBox(height: 12),
+              const Text(
+                'Unable to load routes',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                message,
+                style: TextStyle(color: Colors.grey.shade700),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.arrow_back),
+                label: const Text('Back'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

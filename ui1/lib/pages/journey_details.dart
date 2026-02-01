@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:ui1/models/journey.dart';
 import 'package:intl/intl.dart';
@@ -21,6 +24,10 @@ class _JourneyDetailsPageState extends State<JourneyDetailsPage> with SingleTick
   late LatLng _startLocation;
   late LatLng _endLocation;
   late TabController _tabController;
+  StreamSubscription<Position>? _positionSub;
+  LatLng? _userLocation;
+  bool _tracking = false;
+  bool _trackingLoading = false;
 
   @override
   void initState() {
@@ -37,6 +44,76 @@ class _JourneyDetailsPageState extends State<JourneyDetailsPage> with SingleTick
       final centerLat = (_startLocation.latitude + _endLocation.latitude) / 2;
       final centerLng = (_startLocation.longitude + _endLocation.longitude) / 2;
       _mapController.move(LatLng(centerLat, centerLng), 12);
+    });
+  }
+
+  Future<void> _startLiveTracking() async {
+    if (_trackingLoading) return;
+    setState(() {
+      _trackingLoading = true;
+    });
+
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location permission is required to start the journey.')),
+          );
+        }
+        return;
+      }
+
+      final current = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.best,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _userLocation = LatLng(current.latitude, current.longitude);
+        _tracking = true;
+      });
+
+      _mapController.move(_userLocation!, 16);
+
+      await _positionSub?.cancel();
+      _positionSub = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.best,
+          distanceFilter: 5,
+        ),
+      ).listen((position) {
+        if (!mounted) return;
+        setState(() {
+          _userLocation = LatLng(position.latitude, position.longitude);
+        });
+        _mapController.move(_userLocation!, 16);
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to start live tracking.')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _trackingLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _stopLiveTracking() async {
+    await _positionSub?.cancel();
+    _positionSub = null;
+    if (!mounted) return;
+    setState(() {
+      _tracking = false;
     });
   }
 
@@ -206,6 +283,30 @@ class _JourneyDetailsPageState extends State<JourneyDetailsPage> with SingleTick
                     size: 40,
                   ),
                 ),
+                if (_tracking && _userLocation != null)
+                  Marker(
+                    point: _userLocation!,
+                    width: 36,
+                    height: 36,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.9),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.blue.withOpacity(0.4),
+                            blurRadius: 8,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.my_location,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ],
@@ -303,6 +404,29 @@ class _JourneyDetailsPageState extends State<JourneyDetailsPage> with SingleTick
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _trackingLoading
+                              ? null
+                              : (_tracking ? _stopLiveTracking : _startLiveTracking),
+                          icon: _trackingLoading
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : Icon(_tracking ? Icons.stop_circle : Icons.play_circle),
+                          label: Text(_tracking ? 'Stop Journey' : 'Start Journey'),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
                         ),
                       ),
                     ],
@@ -461,6 +585,36 @@ class _JourneyDetailsPageState extends State<JourneyDetailsPage> with SingleTick
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _trackingLoading
+                            ? null
+                            : () {
+                                _tabController.animateTo(0);
+                                if (_tracking) {
+                                  _stopLiveTracking();
+                                } else {
+                                  _startLiveTracking();
+                                }
+                              },
+                        icon: _trackingLoading
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : Icon(_tracking ? Icons.stop_circle : Icons.play_circle),
+                        label: Text(_tracking ? 'Stop Journey' : 'Start Journey'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
                       ),
                     ),
                   ],
@@ -697,6 +851,7 @@ class _JourneyDetailsPageState extends State<JourneyDetailsPage> with SingleTick
   void dispose() {
     _mapController.dispose();
     _tabController.dispose();
+    _positionSub?.cancel();
     super.dispose();
   }
 }

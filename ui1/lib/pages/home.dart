@@ -357,15 +357,21 @@ class _HomePageRouteState extends State<HomePageRoute> {
               // Categorize journeys
               final List<Journey> all = _allJourneys;
               
-              // Ongoing: journeys that started but haven't finished yet
-              final ongoing = all.where((j) => j.isOngoing).toList()
+              // Today: all journeys scheduled for today that haven't finished yet
+              final todayJourneys = all.where((j) {
+                final journeyDate = DateTime(j.date.year, j.date.month, j.date.day);
+                return journeyDate.isAtSameMomentAs(today) && !j.isFinished;
+              }).toList()
                 ..sort((a, b) => a.date.compareTo(b.date));
               
-              // Upcoming: journeys that haven't started yet
-              final upcoming = all.where((j) => j.isUpcoming).toList()
+              // Upcoming: journeys that haven't started yet (excluding today)
+              final upcoming = all.where((j) {
+                final journeyDate = DateTime(j.date.year, j.date.month, j.date.day);
+                return journeyDate.isAfter(today);
+              }).toList()
                 ..sort((a, b) => a.date.compareTo(b.date));
               
-              // History: journeys that have finished
+              // History: all journeys that have finished
               final history = all.where((j) => j.isFinished).toList()
                 ..sort((a, b) => b.date.compareTo(a.date));
 
@@ -375,8 +381,8 @@ class _HomePageRouteState extends State<HomePageRoute> {
                     controller: _scrollController,
                     padding: const EdgeInsets.symmetric(vertical: 24.0),
                     children: [
-                  // Ongoing journeys section
-                  if (ongoing.isNotEmpty) ...[
+                  // Journeys happening today section
+                  if (todayJourneys.isNotEmpty) ...[
                     Padding(
                       key: _todayKey,
                       padding: const EdgeInsets.symmetric(horizontal: 20.0),
@@ -407,7 +413,7 @@ class _HomePageRouteState extends State<HomePageRoute> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
-                              '${ongoing.length}',
+                              '${todayJourneys.length}',
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
@@ -419,7 +425,7 @@ class _HomePageRouteState extends State<HomePageRoute> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    ...ongoing.map((j) => Padding(
+                    ...todayJourneys.map((j) => Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
                       child: Dismissible(
                         key: ValueKey('journey_${j.id}'),
@@ -438,8 +444,8 @@ class _HomePageRouteState extends State<HomePageRoute> {
                           travelDate: j.date,
                           fromLocation: _locationNameCache['${j.id}_from'] ?? j.from,
                           toLocation: _locationNameCache['${j.id}_to'] ?? j.to,
-                          isUpcoming: false,
-                          isOngoing: true,
+                          isUpcoming: j.date.isAfter(DateTime.now()),
+                          isOngoing: j.isOngoing,
                           imageUrl: j.imageUrl,
                           onTap: () {
                             Navigator.of(context).push(

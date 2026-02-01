@@ -36,7 +36,7 @@ class TfLClient:
         
         params = self._build_auth_params()
         params.update({
-            "mode": "tube,bus,walking",
+            "mode": "bus,cable-car,coach,dlr,elizabeth-line,international-rail,national-rail,overground,plane,replacement-bus,river-bus,river-tour,tram,tube,walking",
             "timeIs": "Departing",
             "journeyPreference": "LeastTime",
             "maxWalkingMinutes": "15",
@@ -101,20 +101,20 @@ class TfLClient:
                     return None
             
             # Filter out journeys containing national rail
-            if "journeys" in data:
-                filtered_journeys = []
-                for journey in data["journeys"]:
-                    has_national_rail = False
-                    for leg in journey.get("legs", []):
-                        mode = leg.get("mode", {}).get("name", "").lower()
-                        if "national-rail" in mode or "rail" in mode:
-                            has_national_rail = True
-                            break
+            # if "journeys" in data:
+            #     filtered_journeys = []
+            #     for journey in data["journeys"]:
+            #         has_national_rail = False
+            #         for leg in journey.get("legs", []):
+            #             mode = leg.get("mode", {}).get("name", "").lower()
+            #             if "national-rail" in mode or "rail" in mode:
+            #                 has_national_rail = True
+            #                 break
                     
-                    if not has_national_rail:
-                        filtered_journeys.append(journey)
+            #         if not has_national_rail:
+            #             filtered_journeys.append(journey)
                 
-                data["journeys"] = filtered_journeys
+            #     data["journeys"] = filtered_journeys
             
             return data
             

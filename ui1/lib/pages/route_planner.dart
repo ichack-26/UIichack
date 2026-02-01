@@ -390,266 +390,264 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
         title: const Text('Route Planner'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
-      body: Column(
-        children: [
-          // Search and input section
-          Container(
-            padding: const EdgeInsets.all(16.0),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.2),
-                  spreadRadius: 1,
-                  blurRadius: 5,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Start Place
-                InkWell(
-                  onTap: () => _showLocationPicker(true),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.blue),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.trip_origin, color: Colors.blue),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _fromAddress.isEmpty ? 'Select Start Place' : _fromAddress,
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: _fromAddress.isEmpty ? Colors.grey : Colors.black,
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            // Search and input section
+            Container(
+              padding: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.2),
+                    spreadRadius: 1,
+                    blurRadius: 5,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Start Place
+                  InkWell(
+                    onTap: () => _showLocationPicker(true),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.blue),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.trip_origin, color: Colors.blue),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _fromAddress.isEmpty ? 'Select Start Place' : _fromAddress,
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: _fromAddress.isEmpty ? Colors.grey : Colors.black,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        const Icon(Icons.search, color: Colors.grey),
-                      ],
+                          const Icon(Icons.search, color: Colors.grey),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                // Destination Place
-                InkWell(
-                  onTap: () => _showLocationPicker(false),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.red),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.location_on, color: Colors.red),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _toAddress.isEmpty ? 'Select Destination Place' : _toAddress,
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: _toAddress.isEmpty ? Colors.grey : Colors.black,
+                  const SizedBox(height: 12),
+                  // Destination Place
+                  InkWell(
+                    onTap: () => _showLocationPicker(false),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.red),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.location_on, color: Colors.red),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _toAddress.isEmpty ? 'Select Destination Place' : _toAddress,
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: _toAddress.isEmpty ? Colors.grey : Colors.black,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        const Icon(Icons.search, color: Colors.grey),
-                      ],
+                          const Icon(Icons.search, color: Colors.grey),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                // Departure Time
-                InkWell(
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: _selectedDate,
-                      firstDate: DateTime.now(),
-                      lastDate: DateTime(2101),
-                    );
-                    if (date != null) {
-                      final time = await showTimePicker(
+                  const SizedBox(height: 12),
+                  // Departure Time
+                  InkWell(
+                    onTap: () async {
+                      final date = await showDatePicker(
                         context: context,
-                        initialTime: TimeOfDay.now(),
+                        initialDate: _selectedDate,
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime(2101),
                       );
-                      if (time != null) {
-                        setState(() {
-                          _selectedDate = DateTime(
-                            date.year,
-                            date.month,
-                            date.day,
-                            time.hour,
-                            time.minute,
-                          );
-                        });
+                      if (date != null) {
+                        final time = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay.now(),
+                        );
+                        if (time != null) {
+                          setState(() {
+                            _selectedDate = DateTime(
+                              date.year,
+                              date.month,
+                              date.day,
+                              time.hour,
+                              time.minute,
+                            );
+                          });
+                        }
                       }
-                    }
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.access_time, color: Colors.grey),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            '${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year} ${_selectedDate.hour}:${_selectedDate.minute.toString().padLeft(2, '0')}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              color: Colors.black,
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.access_time, color: Colors.grey),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              '${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year} ${_selectedDate.hour}:${_selectedDate.minute.toString().padLeft(2, '0')}',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                color: Colors.black,
+                              ),
                             ),
                           ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+        
+                  // Collapsible Preferences
+                  Theme(
+                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                    child: ExpansionTile(
+                      key: const Key('preferences_tile'),
+                      initiallyExpanded: _prefsExpanded,
+                      onExpansionChanged: (v) => setState(() => _prefsExpanded = v),
+                      leading: const Icon(Icons.filter_list),
+                      title: const Text('Preferences'),
+                      subtitle: Text(_preferencesSummary),
+                      children: [
+                        CheckboxListTile(
+                          value: _avoidClaustrophobic,
+                          onChanged: (v) => setState(() => _avoidClaustrophobic = v ?? false),
+                          title: const Text('Avoid claustrophobic areas'),
+                          subtitle: const Text('Avoid narrow tunnels or enclosed corridors'),
+                          secondary: const Icon(Icons.airline_stops_outlined),
+                          controlAffinity: ListTileControlAffinity.leading,
                         ),
+        
+                        CheckboxListTile(
+                          value: _requireLift,
+                          onChanged: (v) => setState(() => _requireLift = v ?? false),
+                          title: const Text('Require lift/elevator access'),
+                          subtitle: const Text('Prefer routes with elevator access'),
+                          secondary: const Icon(Icons.elevator),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+        
+                        CheckboxListTile(
+                          value: _avoidStairs,
+                          onChanged: (v) => setState(() => _avoidStairs = v ?? false),
+                          title: const Text('Avoid stairs'),
+                          subtitle: const Text('Prefer ramps and level paths'),
+                          secondary: const Icon(Icons.stairs),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+        
+                        CheckboxListTile(
+                          value: _wheelchairAccessible,
+                          onChanged: (v) => setState(() => _wheelchairAccessible = v ?? false),
+                          title: const Text('Wheelchair-accessible routes only'),
+                          subtitle: const Text('Filter to fully accessible options'),
+                          secondary: const Icon(Icons.accessible),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+        
+                        CheckboxListTile(
+                          value: _avoidNoise,
+                          onChanged: (v) => setState(() => _avoidNoise = v ?? false),
+                          title: const Text('Avoid noisy areas'),
+                          subtitle: const Text('Prefer quieter routes'),
+                          secondary: const Icon(Icons.volume_off),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+        
+                        CheckboxListTile(
+                          value: _avoidHeat,
+                          onChanged: (v) => setState(() => _avoidHeat = v ?? false),
+                          title: const Text('Avoid heat'),
+                          subtitle: const Text('Prefer shaded areas'),
+                          secondary: const Icon(Icons.wb_sunny),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+        
+                        CheckboxListTile(
+                          value: _preferBuses,
+                          onChanged: (v) => setState(() => _preferBuses = v ?? false),
+                          title: const Text('Prefer buses'),
+                          subtitle: const Text('Favor bus routes over other transport'),
+                          secondary: const Icon(Icons.directions_bus),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+        
+                        CheckboxListTile(
+                          value: _minimiseChanges,
+                          onChanged: (v) => setState(() => _minimiseChanges = v ?? false),
+                          title: const Text('Minimize transfers'),
+                          subtitle: const Text('Prefer routes with fewer changes'),
+                          secondary: const Icon(Icons.compare_arrows),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+        
+                        const SizedBox(height: 4),
                       ],
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
-
-                // Collapsible Preferences
-                Theme(
-                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                  child: ExpansionTile(
-                    key: const Key('preferences_tile'),
-                    initiallyExpanded: _prefsExpanded,
-                    onExpansionChanged: (v) => setState(() => _prefsExpanded = v),
-                    leading: const Icon(Icons.filter_list),
-                    title: const Text('Preferences'),
-                    subtitle: Text(_preferencesSummary),
-                    children: [
-                      CheckboxListTile(
-                        value: _avoidClaustrophobic,
-                        onChanged: (v) => setState(() => _avoidClaustrophobic = v ?? false),
-                        title: const Text('Avoid claustrophobic areas'),
-                        subtitle: const Text('Avoid narrow tunnels or enclosed corridors'),
-                        secondary: const Icon(Icons.airline_stops_outlined),
-                        controlAffinity: ListTileControlAffinity.leading,
+        
+                  const SizedBox(height: 8),
+                  // Go Button
+                  ElevatedButton(
+                    onPressed: (_fromLocation != null && _toLocation != null)
+                        ? _planRoute
+                        : null,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: Colors.grey[300],
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
                       ),
-
-                      CheckboxListTile(
-                        value: _requireLift,
-                        onChanged: (v) => setState(() => _requireLift = v ?? false),
-                        title: const Text('Require lift/elevator access'),
-                        subtitle: const Text('Prefer routes with elevator access'),
-                        secondary: const Icon(Icons.elevator),
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-
-                      CheckboxListTile(
-                        value: _avoidStairs,
-                        onChanged: (v) => setState(() => _avoidStairs = v ?? false),
-                        title: const Text('Avoid stairs'),
-                        subtitle: const Text('Prefer ramps and level paths'),
-                        secondary: const Icon(Icons.stairs),
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-
-                      CheckboxListTile(
-                        value: _wheelchairAccessible,
-                        onChanged: (v) => setState(() => _wheelchairAccessible = v ?? false),
-                        title: const Text('Wheelchair-accessible routes only'),
-                        subtitle: const Text('Filter to fully accessible options'),
-                        secondary: const Icon(Icons.accessible),
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-
-                      CheckboxListTile(
-                        value: _avoidNoise,
-                        onChanged: (v) => setState(() => _avoidNoise = v ?? false),
-                        title: const Text('Avoid noisy areas'),
-                        subtitle: const Text('Prefer quieter routes'),
-                        secondary: const Icon(Icons.volume_off),
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-
-                      CheckboxListTile(
-                        value: _avoidHeat,
-                        onChanged: (v) => setState(() => _avoidHeat = v ?? false),
-                        title: const Text('Avoid heat'),
-                        subtitle: const Text('Prefer shaded areas'),
-                        secondary: const Icon(Icons.wb_sunny),
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-
-                      CheckboxListTile(
-                        value: _preferBuses,
-                        onChanged: (v) => setState(() => _preferBuses = v ?? false),
-                        title: const Text('Prefer buses'),
-                        subtitle: const Text('Favor bus routes over other transport'),
-                        secondary: const Icon(Icons.directions_bus),
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-
-                      CheckboxListTile(
-                        value: _minimiseChanges,
-                        onChanged: (v) => setState(() => _minimiseChanges = v ?? false),
-                        title: const Text('Minimize transfers'),
-                        subtitle: const Text('Prefer routes with fewer changes'),
-                        secondary: const Icon(Icons.compare_arrows),
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-
-                      const SizedBox(height: 4),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 8),
-                // Go Button
-                ElevatedButton(
-                  onPressed: (_fromLocation != null && _toLocation != null)
-                      ? _planRoute
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey[300],
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Plan Route',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                   ),
-                  child: const Text(
-                    'Plan Route',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.map_outlined, size: 64, color: Colors.grey.shade400),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Map opens when you tap "Select from Map"',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-                    ),
-                  ],
-                ),
+                ],
               ),
             ),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.map_outlined, size: 64, color: Colors.grey.shade400),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Map opens when you tap "Select from Map"',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

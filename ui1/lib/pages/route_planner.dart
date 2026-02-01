@@ -1153,32 +1153,83 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                   ),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[400],
-                          borderRadius: BorderRadius.circular(2),
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[400],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      Text(
-                        isStart ? 'Select Start Location' : 'Select Destination',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 16,
+                            backgroundColor: isStart ? Colors.blue : Colors.red,
+                            child: Icon(
+                              isStart ? Icons.trip_origin : Icons.location_on,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  isStart ? 'Select Start Location' : 'Select Destination',
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'UK locations only',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
                       TextField(
                         controller: _searchController,
                         decoration: InputDecoration(
-                          hintText: 'Search for a place',
+                          hintText: 'Search for a place or postcode',
+                          filled: true,
+                          fillColor: Colors.white,
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
                           ),
                           prefixIcon: const Icon(Icons.search),
+                          suffixIcon: _searchController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setModalState(() {
+                                      _searchResults = [];
+                                      _isSearching = false;
+                                    });
+                                  },
+                                )
+                              : null,
                         ),
                         onChanged: (value) {
                           _searchPlaces(value).then((_) {
@@ -1201,30 +1252,48 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                       itemCount: _searchResults.length,
                       itemBuilder: (context, index) {
                         final result = _searchResults[index];
-                        return ListTile(
-                          leading: Icon(
-                            Icons.location_on,
-                            color: isStart ? Colors.blue : Colors.red,
+                        return Card(
+                          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          title: Text(result.displayName),
-                          onTap: () {
-                            final location = LatLng(result.lat, result.lon);
-                            if (!_ensureUkSelection(location, isStart)) {
-                              return;
-                            }
-                            setState(() {
-                              if (isStart) {
-                                _fromLocation = location;
-                                _fromAddress = result.displayName;
-                              } else {
-                                _toLocation = location;
-                                _toAddress = result.displayName;
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: (isStart ? Colors.blue : Colors.red).withAlpha(30),
+                              child: Icon(
+                                Icons.location_on,
+                                color: isStart ? Colors.blue : Colors.red,
+                              ),
+                            ),
+                            title: Text(
+                              result.displayName,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              '${result.lat.toStringAsFixed(4)}, ${result.lon.toStringAsFixed(4)}',
+                              style: TextStyle(color: Colors.grey[600]),
+                            ),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () {
+                              final location = LatLng(result.lat, result.lon);
+                              if (!_ensureUkSelection(location, isStart)) {
+                                return;
                               }
-                              _updateMarkers();
-                            });
-                            _mapController.move(location, 14);
-                            Navigator.of(context).pop();
-                          },
+                              setState(() {
+                                if (isStart) {
+                                  _fromLocation = location;
+                                  _fromAddress = result.displayName;
+                                } else {
+                                  _toLocation = location;
+                                  _toAddress = result.displayName;
+                                }
+                                _updateMarkers();
+                              });
+                              _mapController.move(location, 14);
+                              Navigator.of(context).pop();
+                            },
+                          ),
                         );
                       },
                     ),
@@ -1235,12 +1304,14 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                       const Padding(
                         padding: EdgeInsets.all(16.0),
                         child: Text(
-                          'Search for a place or tap the button below to select from map',
+                          'Search for a place or pick directly on the map',
                           style: TextStyle(color: Colors.grey),
                           textAlign: TextAlign.center,
                         ),
                       ),
-                      ElevatedButton.icon(
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
                         onPressed: () {
                           Navigator.of(context).pop();
                           // Use Future.delayed to ensure modal is fully closed
@@ -1259,7 +1330,14 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                         icon: const Icon(Icons.map),
                         label: const Text('Select from Map'),
                         style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            backgroundColor: Colors.blue.withAlpha(230),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                        ),
                         ),
                       ),
                     ],

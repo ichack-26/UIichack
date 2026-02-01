@@ -30,7 +30,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
   List<SearchResult> _searchResults = [];
   bool _isSearching = false;
   Timer? _debounce;
-  LatLng _userLocation = const LatLng(37.7749, -122.4194); // Default to San Francisco
+  LatLng _userLocation = const LatLng(51.5074, -0.1278); // Default to London
 
   // User preferences
   bool _avoidClaustrophobic = false;
@@ -252,6 +252,15 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
   void initState() {
     super.initState();
     _selectedDate = DateTime.now();
+    
+    // Initialize with London as default locations
+    _fromLocation = _userLocation;
+    _fromAddress = 'Select Start Location';
+    
+    // Set a default destination (e.g., South Kensington, London)
+    _toLocation = const LatLng(51.4945, -0.1757);
+    _toAddress = 'Select Destination';
+    
     _getUserLocation();
   }
 
@@ -279,29 +288,51 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
         timeLimit: const Duration(seconds: 10),
       );
       
-      setState(() {
-        _userLocation = LatLng(position.latitude, position.longitude);
-        
-        // Set start location to user's current location
-        _fromLocation = _userLocation;
-        _fromAddress = 'Your Location (${_userLocation.latitude.toStringAsFixed(4)}, ${_userLocation.longitude.toStringAsFixed(4)})';
-        
-        _updateMarkers();
-        _mapController.move(_userLocation, 14);
-      });
-      print('User location obtained: $_userLocation');
+      final gpsLocation = LatLng(position.latitude, position.longitude);
+
+      // Only use GPS location if it's within the UK bounds
+      if (_isUkLatLng(gpsLocation)) {
+        setState(() {
+          _userLocation = gpsLocation;
+          _updateMarkers();
+          _mapController.move(_userLocation, 14);
+        });
+        print('User location obtained: $_userLocation');
+      } else {
+        print('GPS location outside UK, keeping default UK location.');
+      }
     } catch (e) {
       print('Error getting user location: $e');
-      // Will use default San Francisco location
+      // Will use default London location
     }
+  }
+
+  bool _isUkLatLng(LatLng point) {
+    // Rough UK bounding box (lat: 49.8..60.9, lon: -8.6..2.1)
+    return point.latitude >= 49.8 &&
+        point.latitude <= 60.9 &&
+        point.longitude >= -8.6 &&
+        point.longitude <= 2.1;
+  }
+
+  bool _ensureUkSelection(LatLng point, bool isStart) {
+    if (_isUkLatLng(point)) {
+      return true;
+    }
+
+    final label = isStart ? 'start' : 'destination';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Please select a UK $label location.'),
+      ),
+    );
+    return false;
   }
 
   String get _preferencesSummary {
     final count = [_avoidClaustrophobic, _requireLift, _avoidStairs, _wheelchairAccessible].where((v) => v).length;
     return count == 0 ? 'None selected' : '$count selected';
   }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -523,6 +554,9 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                     initialZoom: 14,
                     onTap: (tapPosition, point) {
                       if (_selectingStart) {
+                        if (!_ensureUkSelection(point, true)) {
+                          return;
+                        }
                         setState(() {
                           _fromLocation = point;
                           _fromAddress = 'Lat: ${point.latitude.toStringAsFixed(4)}, Lng: ${point.longitude.toStringAsFixed(4)}';
@@ -530,6 +564,9 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                           _selectingStart = false;
                         });
                       } else if (_selectingDestination) {
+                        if (!_ensureUkSelection(point, false)) {
+                          return;
+                        }
                         setState(() {
                           _toLocation = point;
                           _toAddress = 'Lat: ${point.latitude.toStringAsFixed(4)}, Lng: ${point.longitude.toStringAsFixed(4)}';
@@ -641,85 +678,63 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
     });
   }
 
-  Future<String?> _getPostcodeFromLatLng(double latitude, double longitude) async {
+  /// Convert UK latitude/longitude to postcode using postcodes.io API
+  /// Returns null if location is outside UK or API fails
+  Future<String?> _convertLatLngToUKPostcode(double latitude, double longitude) async {
     try {
-      print('Looking up postcode for lat=$latitude, lng=$longitude');
+      print('Converting lat=$latitude, lng=$longitude to UK postcode...');
       
-      // FIRST: Try reverse geocoding to get the exact address postcode
-      print('Step 1: Trying reverse geocoding for exact postcode...');
-      final reversGeoUrl = Uri.parse(
-        'https://nominatim.openstreetmap.org/reverse?format=json&lat=$latitude&lon=$longitude&zoom=18',
+      final url = Uri.parse(
+        'https://api.postcodes.io/postcodes?lat=$latitude&lon=$longitude&limit=1',
       );
       
+      final response = await http.get(url).timeout(const Duration(seconds: 8));
       
-      final reverseResponse = await http.get(
-        reversGeoUrl,
-        headers: {'User-Agent': 'FlutterApp'},
-      ).timeout(const Duration(seconds: 10));
-      
-      if (reverseResponse.statusCode == 200) {
-        final reverseData = jsonDecode(reverseResponse.body);
-        print('Reverse geocoding response: ${reverseData['display_name']}');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
         
-        if (reverseData['address'] != null) {
-          final address = reverseData['address'];
-          
-          // Try to get postcode from address
-          final postcode = address['postcode'];
-          if (postcode != null && postcode.toString().isNotEmpty) {
-            print('✓ Got exact postcode from address: $postcode');
+        // postcodes.io returns status: 200 with result: null for non-UK locations
+        if (data['status'] == 200) {
+          if (data['result'] != null && data['result'].isNotEmpty) {
+            final result = data['result'][0];
+            final postcode = result['postcode'];
+            final country = result['country'];
+            
+            print('✓ UK Postcode: $postcode (in $country)');
             return postcode;
           } else {
-            print('⚠ No postcode in address data');
+            // No result found - location is outside UK
+            print('✗ No postcode found - location may be outside UK');
+            return null;
           }
+        } else {
+          // Unexpected status
+          print('✗ Unexpected API status: ${data['status']}');
+          return null;
         }
+      } else {
+        print('✗ HTTP error: ${response.statusCode}');
+        return null;
       }
-      
-      // SECOND: Try postcodes.io with increasing radius
-      print('Step 2: Trying postcodes.io with radius search...');
-      final radii = [100, 500, 1000, 2000];
-      
-      for (final radius in radii) {
-        final url = Uri.parse(
-          'https://api.postcodes.io/postcodes?lat=$latitude&lon=$longitude&radius=$radius&limit=1',
-        );
-        
-        final response = await http.get(url).timeout(const Duration(seconds: 10));
-        
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          
-          if (data['status'] == 200 && data['result'] != null && (data['result'] as List).isNotEmpty) {
-            final postcode = data['result'][0]['postcode'];
-            final distance = data['result'][0]['distance']?.toStringAsFixed(0) ?? '?';
-            print('✓ Got nearby postcode: $postcode (${distance}m away, radius=${radius}m)');
-            return postcode;
-          }
-        }
-      }
-      
-      // LAST RESORT: Use location name
-      print('Step 3: Last resort - using location name...');
-      if (reverseResponse.statusCode == 200) {
-        final reverseData = jsonDecode(reverseResponse.body);
-        if (reverseData['address'] != null) {
-          final address = reverseData['address'];
-          final town = address['town'] ?? address['city'] ?? address['suburb'] ?? address['village'] ?? address['county'] ?? 'Unknown';
-          print('⚠ Using location name as fallback: $town');
-          return town;
-        }
-      }
-      
-      print('✗ No postcode or location found for lat=$latitude, lng=$longitude');
-      return null;
     } catch (e) {
-      print('✗ Error getting postcode: $e');
+      print('✗ Error converting to postcode: $e');
       return null;
     }
   }
 
+
   Future<void> _planRoute() async {
     if (_fromLocation == null || _toLocation == null) return;
+
+    if (!_isUkLatLng(_fromLocation!) || !_isUkLatLng(_toLocation!)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select UK locations for both start and destination.')),
+      );
+      return;
+    }
+
+    print('DEBUG: From location = ${_fromLocation!.latitude}, ${_fromLocation!.longitude}');
+    print('DEBUG: To location = ${_toLocation!.latitude}, ${_toLocation!.longitude}');
 
     // Show loading dialog
     showDialog(
@@ -739,23 +754,23 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
     try {
       // Convert coordinates to postcodes
       print('Converting coordinates to postcodes...');
-      final fromPostcode = await _getPostcodeFromLatLng(
+      final fromPostcode = await _convertLatLngToUKPostcode(
         _fromLocation!.latitude,
         _fromLocation!.longitude,
       );
-      final toPostcode = await _getPostcodeFromLatLng(
+      final toPostcode = await _convertLatLngToUKPostcode(
         _toLocation!.latitude,
         _toLocation!.longitude,
       );
       
       if (fromPostcode == null) {
-        throw Exception('Could not determine postcode/location for start point. Try selecting a different location.');
+        throw Exception('Could not convert start location to UK postcode. Please use the search function.');
       }
       if (toPostcode == null) {
-        throw Exception('Could not determine postcode/location for destination. Try selecting a different location.');
+        throw Exception('Could not convert destination to UK postcode. Please use the search function.');
       }
       
-      print('From postcode: $fromPostcode, To postcode: $toPostcode');
+      print('Route: $fromPostcode → $toPostcode');
       
       // Fetch routes from backend using postcodes
       _routes = await _fetchRoutesFromBackend(fromPostcode, toPostcode);
@@ -1148,8 +1163,11 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                           ),
                           title: Text(result.displayName),
                           onTap: () {
+                            final location = LatLng(result.lat, result.lon);
+                            if (!_ensureUkSelection(location, isStart)) {
+                              return;
+                            }
                             setState(() {
-                              final location = LatLng(result.lat, result.lon);
                               if (isStart) {
                                 _fromLocation = location;
                                 _fromAddress = result.displayName;
@@ -1159,7 +1177,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                               }
                               _updateMarkers();
                             });
-                            _mapController.move(LatLng(result.lat, result.lon), 14);
+                            _mapController.move(location, 14);
                             Navigator.of(context).pop();
                           },
                         );

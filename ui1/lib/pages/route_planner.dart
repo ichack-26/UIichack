@@ -706,7 +706,9 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
     final picked = await Navigator.of(context).push<LatLng>(
       MaterialPageRoute(
         builder: (context) => MapPickerPage(
-          initialLocation: _userLocation,
+          initialLocation: isStart
+              ? (_fromLocation ?? _userLocation)
+              : (_toLocation ?? _userLocation),
           isStart: isStart,
           existingMarkers: _markers,
         ),
@@ -950,7 +952,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
 
   Future<List<Route>> _fetchRoutesFromBackend(String fromPostcode, String toPostcode) async {
     try {
-      final url = Uri.parse('http://172.30.111.204:8000/route');
+      final url = Uri.parse('http://172.30.185.25:8000/route');
 
       print("Going from $fromPostcode to $toPostcode");
       
@@ -1419,13 +1421,30 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
   late MapController _fullscreenMapController;
   int? _selectedRouteIndex = 0;
 
+  void _fitToRoute(int index) {
+    if (index < 0 || index >= widget.routes.length) return;
+    final points = widget.routes[index].polyline.points;
+    if (points.isEmpty) {
+      _fullscreenMapController.move(widget.userLocation, 14);
+      return;
+    }
+
+    final bounds = LatLngBounds.fromPoints(points);
+    _fullscreenMapController.fitCamera(
+      CameraFit.bounds(
+        bounds: bounds,
+        padding: const EdgeInsets.all(48),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
     _fullscreenMapController = MapController();
-    // Center the map at the user's location
     Future.delayed(const Duration(milliseconds: 500), () {
-      _fullscreenMapController.move(widget.userLocation, 14);
+      final initialIndex = _selectedRouteIndex ?? 0;
+      _fitToRoute(initialIndex);
     });
   }
 
@@ -1514,6 +1533,7 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
                             setState(() {
                               _selectedRouteIndex = index;
                             });
+                            _fitToRoute(index);
                             if (widget.onRouteSelected != null) {
                               widget.onRouteSelected!(index);
                             }

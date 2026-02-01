@@ -37,7 +37,11 @@ class _MyStatsPageState extends State<MyStatsPage> {
               data.containsKey('fromLng') &&
               data.containsKey('toLat') &&
               data.containsKey('toLng')) {
-            journeys.add(Journey.fromJson(data));
+            final journey = Journey.fromJson(data);
+            // Only include finished/past journeys
+            if (journey.isFinished) {
+              journeys.add(journey);
+            }
           }
         } catch (_) {
           // Ignore malformed journeys

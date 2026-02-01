@@ -914,16 +914,52 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
   Route _parseBackendRoute(Map<String, dynamic> routeData, bool recommended) {
     final List<LatLng> points = [];
 
-    // For TfL routes, we create a line between start and end
-    // as detailed turn-by-turn polylines aren't provided
-    points.add(_fromLocation!);
-    points.add(_toLocation!);
+    // Prefer detailed step paths if provided by backend
+    final steps = routeData['steps'] as List<dynamic>? ?? [];
+    for (final step in steps) {
+      final path = (step as Map<String, dynamic>)['path'] as List<dynamic>? ?? [];
+      for (final p in path) {
+        if (p is Map<String, dynamic>) {
+          final lat = p['lat'];
+          final lng = p['lng'];
+          if (lat is num && lng is num) {
+            final latVal = lat.toDouble();
+            final lngVal = lng.toDouble();
+            // Backend may send lat/lng swapped; detect UK lat/lng and fix
+            if (latVal.abs() <= 3 && lngVal.abs() >= 49) {
+              points.add(LatLng(lngVal, latVal));
+            } else {
+              points.add(LatLng(latVal, lngVal));
+            }
+          }
+        }
+      }
+    }
+
+    // Use backend-provided polyline coordinates when available
+    if (points.isEmpty) {
+      final polylineCoords = routeData['polyline_coords'] as List<dynamic>? ?? [];
+      for (final coord in polylineCoords) {
+        if (coord is List && coord.length >= 2) {
+          final lat = coord[0];
+          final lon = coord[1];
+          if (lat is num && lon is num) {
+            points.add(LatLng(lat.toDouble(), lon.toDouble()));
+          }
+        }
+      }
+    }
+
+    // Fallback: straight line if no geometry provided
+    if (points.isEmpty) {
+      points.add(_fromLocation!);
+      points.add(_toLocation!);
+    }
 
     // Determine color based on recommendation
     Color color = recommended ? Colors.blue : Colors.green;
 
     // Build step descriptions
-    final steps = routeData['steps'] as List<dynamic>? ?? [];
     final stepsDescription = steps
         .map((s) => '${s['instructions']}')
         .join(' → ')

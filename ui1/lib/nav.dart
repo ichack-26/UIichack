@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:ui1/pages/home.dart';
 import 'package:ui1/pages/route_planner.dart';
 import 'package:ui1/pages/live_location.dart';
+import 'package:ui1/pages/my_stats.dart';
 
 /// Flutter code sample for [NavigationBar].
 
@@ -54,6 +55,11 @@ class _NavigationExampleState extends State<NavigationExample> {
             icon: Icon(Icons.my_location_outlined),
             label: 'Live',
           ),
+          NavigationDestination(
+            selectedIcon: Icon(Icons.person),
+            icon: Icon(Icons.person_outline),
+            label: 'My',
+          ),
         ],
       ),
       body: <Widget>[
@@ -62,6 +68,8 @@ class _NavigationExampleState extends State<NavigationExample> {
         RoutePlannerRoute(),
 
         const LiveLocationPage(),
+
+        const MyStatsPage(),
       ][currentPageIndex],
     );
   }

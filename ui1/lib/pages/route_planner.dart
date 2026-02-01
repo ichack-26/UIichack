@@ -737,8 +737,11 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
     print('DEBUG: To location = ${_toLocation!.latitude}, ${_toLocation!.longitude}');
 
     // Show loading dialog
+    var dialogOpen = true;
+    final rootNavigator = Navigator.of(context, rootNavigator: true);
     showDialog(
       context: context,
+      useRootNavigator: true,
       barrierDismissible: false,
       builder: (context) => const AlertDialog(
         content: Row(
@@ -776,7 +779,8 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
       _routes = await _fetchRoutesFromBackend(fromPostcode, toPostcode);
       
       if (!mounted) return;
-      Navigator.of(context).pop(); // Close loading dialog
+      rootNavigator.pop(); // Close loading dialog
+      dialogOpen = false;
       
       if (_routes.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -817,10 +821,13 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
     } catch (e) {
       print('Error planning route: $e');
       if (mounted) {
-        Navigator.of(context).pop(); // Close loading dialog
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e')),
         );
+      }
+    } finally {
+      if (dialogOpen && mounted && rootNavigator.canPop()) {
+        rootNavigator.pop();
       }
     }
   }

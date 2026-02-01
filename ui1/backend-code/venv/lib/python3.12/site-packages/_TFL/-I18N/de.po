@@ -1,0 +1,65 @@
+# German translations for TFL.
+# Copyright (C) 2020 Mag. Christian Tanzer
+# This file is distributed under the same license as the TFL
+# project.
+# Christian Tanzer <tanzer@swing.co.at>, 2016.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: TFL 1.0\n"
+"Report-Msgid-Bugs-To: tanzer@swing.co.at\n"
+"POT-Creation-Date: 2020-05-10 14:29+0200\n"
+"PO-Revision-Date: 2020-05-10 14:35+0200\n"
+"Last-Translator: Christian Tanzer <tanzer@swing.co.at>\n"
+"Language: de\n"
+"Language-Team: de <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1)\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.8.0\n"
+
+#: _TFL/CAO.py:876
+msgid "Display help about command"
+msgstr "Zeige Hilfetext zu Befehl an"
+
+#: _TFL/Infinity.py:150
+msgid "Infinity"
+msgstr "Unendlich"
+
+#: _TFL/_Babel/_Test/_Test.py:27 _TFL/_Babel/_Test/_Test.py:35
+msgid "Just markup"
+msgstr ""
+
+#: _TFL/_Babel/_Test/_Test.py:28 _TFL/_Babel/_Test/_Test.py:36
+msgid "Markup and translation"
+msgstr ""
+
+#: _TFL/HTML.py:76
+#, python-format
+msgid "Need Javascript for displaying %s"
+msgstr "Für die Darstellung der %s ist Javascript erforderlich"
+
+#: _TFL/_Babel/_Test/_Test.py:38
+msgid "Plural"
+msgstr ""
+
+#: _TFL/_Babel/_Test/_Test.py:29 _TFL/_Babel/_Test/_Test.py:37
+#: _TFL/_Babel/_Test/_Test.py:40 _TFL/_Babel/_Test/_Test.py:41
+#: _TFL/_Babel/_Test/_Test.py:42
+msgid "Singular"
+msgid_plural "Plural"
+msgstr[0] ""
+msgstr[1] ""
+
+#: _TFL/Command.py:338
+msgid "command"
+msgstr "Befehl"
+
+#: _TFL/HTML.py:58
+msgid "email address"
+msgstr "Emailadresse"
+
+#: _TFL/HTML.py:59
+msgid "phone number"
+msgstr "Telefonnummer"

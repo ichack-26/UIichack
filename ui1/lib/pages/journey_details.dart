@@ -28,12 +28,18 @@ class _JourneyDetailsPageState extends State<JourneyDetailsPage> with SingleTick
   LatLng? _userLocation;
   bool _tracking = false;
   bool _trackingLoading = false;
+  double? _currentZoom;
+  StreamSubscription<MapEvent>? _mapEventSub;
 
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
     _tabController = TabController(length: 2, vsync: this);
+
+    _mapEventSub = _mapController.mapEventStream.listen((event) {
+      _currentZoom = event.camera.zoom;
+    });
     
     // Use the coordinates stored in the journey
     _startLocation = LatLng(widget.journey.fromLat, widget.journey.fromLng);
@@ -78,7 +84,7 @@ class _JourneyDetailsPageState extends State<JourneyDetailsPage> with SingleTick
         _tracking = true;
       });
 
-      _mapController.move(_userLocation!, 16);
+      _mapController.move(_userLocation!, _currentZoom ?? _mapController.camera.zoom);
 
       await _positionSub?.cancel();
       _positionSub = Geolocator.getPositionStream(
@@ -91,7 +97,7 @@ class _JourneyDetailsPageState extends State<JourneyDetailsPage> with SingleTick
         setState(() {
           _userLocation = LatLng(position.latitude, position.longitude);
         });
-        _mapController.move(_userLocation!, 16);
+        _mapController.move(_userLocation!, _currentZoom ?? _mapController.camera.zoom);
       });
     } catch (_) {
       if (mounted) {
@@ -852,6 +858,7 @@ class _JourneyDetailsPageState extends State<JourneyDetailsPage> with SingleTick
     _mapController.dispose();
     _tabController.dispose();
     _positionSub?.cancel();
+    _mapEventSub?.cancel();
     super.dispose();
   }
 }

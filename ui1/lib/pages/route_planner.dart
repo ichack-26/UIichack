@@ -37,6 +37,10 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
   bool _requireLift = false;
   bool _avoidStairs = false;
   bool _wheelchairAccessible = false;
+  bool _avoidNoise = false;
+  bool _avoidHeat = false;
+  bool _preferBuses = false;
+  bool _minimiseChanges = false;
 
   // Routes state
   List<Route> _routes = [];
@@ -381,7 +385,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
   }
 
   String get _preferencesSummary {
-    final count = [_avoidClaustrophobic, _requireLift, _avoidStairs, _wheelchairAccessible].where((v) => v).length;
+    final count = [_avoidClaustrophobic, _requireLift, _avoidStairs, _wheelchairAccessible, _avoidNoise, _avoidHeat, _preferBuses, _minimiseChanges].where((v) => v).length;
     return count == 0 ? 'None selected' : '$count selected';
   }
   Widget build(BuildContext context) {
@@ -563,6 +567,42 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                         title: const Text('Wheelchair-accessible routes only'),
                         subtitle: const Text('Filter to fully accessible options'),
                         secondary: const Icon(Icons.accessible),
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
+
+                      CheckboxListTile(
+                        value: _avoidNoise,
+                        onChanged: (v) => setState(() => _avoidNoise = v ?? false),
+                        title: const Text('Avoid noisy areas'),
+                        subtitle: const Text('Prefer quieter routes'),
+                        secondary: const Icon(Icons.volume_off),
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
+
+                      CheckboxListTile(
+                        value: _avoidHeat,
+                        onChanged: (v) => setState(() => _avoidHeat = v ?? false),
+                        title: const Text('Avoid heat'),
+                        subtitle: const Text('Prefer shaded areas'),
+                        secondary: const Icon(Icons.wb_sunny),
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
+
+                      CheckboxListTile(
+                        value: _preferBuses,
+                        onChanged: (v) => setState(() => _preferBuses = v ?? false),
+                        title: const Text('Prefer buses'),
+                        subtitle: const Text('Favor bus routes over other transport'),
+                        secondary: const Icon(Icons.directions_bus),
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
+
+                      CheckboxListTile(
+                        value: _minimiseChanges,
+                        onChanged: (v) => setState(() => _minimiseChanges = v ?? false),
+                        title: const Text('Minimize transfers'),
+                        subtitle: const Text('Prefer routes with fewer changes'),
+                        secondary: const Icon(Icons.compare_arrows),
                         controlAffinity: ListTileControlAffinity.leading,
                       ),
 
@@ -894,10 +934,10 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
         'destination': toPostcode,
         'preferences': {
           'avoid_crowds': _avoidClaustrophobic,
-          'avoid_noise': false, // Not exposed in UI yet
-          'avoid_heat': false, // Not exposed in UI yet
-          'prefer_buses': false, // Not exposed in UI yet
-          'minimise_changes': false, // Not exposed in UI yet
+          'avoid_noise': _avoidNoise,
+          'avoid_heat': _avoidHeat,
+          'prefer_buses': _preferBuses,
+          'minimise_changes': _minimiseChanges,
           'wheelchair_accessible': _wheelchairAccessible,
           'avoid_stairs': _avoidStairs,
         },
@@ -907,7 +947,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
       };
 
       print('Sending route request to backend: $requestBody');
-      print('Preferences: avoid_crowds=$_avoidClaustrophobic, wheelchair_accessible=$_wheelchairAccessible, avoid_stairs=$_avoidStairs');
+      print('Preferences: avoid_crowds=$_avoidClaustrophobic, avoid_noise=$_avoidNoise, avoid_heat=$_avoidHeat, prefer_buses=$_preferBuses, minimise_changes=$_minimiseChanges, wheelchair_accessible=$_wheelchairAccessible, avoid_stairs=$_avoidStairs');
       print('Formatted travel_date: ${_selectedDate.toIso8601String().split('T')[0]}');
       print('Formatted start_time: ${_selectedDate.hour.toString().padLeft(2, '0')}:${_selectedDate.minute.toString().padLeft(2, '0')}');
 

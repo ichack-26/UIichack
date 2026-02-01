@@ -296,7 +296,19 @@ async def plan_route(request: RouteRequest):
         routes.sort(key=lambda r: r.overall_score, reverse=True)
         routes[0].recommended = True
         primary = routes[0]
-        alternative = next((r for r in routes[1:] if len({s.line for s in r.steps if s.line} & {s.line for s in primary.steps if s.line}) / max(len({s.line for s in primary.steps if s.line}), 1) < 0.5), None) or (routes[1] if len(routes) > 1 else None)
+        alternative=None
+        if (len(preferences_dict.values()==0)):
+            alternative = parse_tfl_journey(
+                journey_data["journeys"][0],
+                "route_fastest",
+                preferences_dict,
+                disruptions,
+                request.travel_date,
+                request.start_time
+            )
+        else:
+        
+            alternative = next((r for r in routes[1:] if len({s.line for s in r.steps if s.line} & {s.line for s in primary.steps if s.line}) / max(len({s.line for s in primary.steps if s.line}), 1) < 0.5), None) or (routes[1] if len(routes) > 1 else None)
 
         return RouteResponse(success=True, primary_route=primary, alternative_route=alternative)
 

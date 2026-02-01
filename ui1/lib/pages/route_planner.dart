@@ -900,11 +900,13 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
           'minimise_changes': false, // Not exposed in UI yet
         },
         'travel_date': _selectedDate.toIso8601String().split('T')[0],
-        'start_time': null, // User can set this if needed
+        'start_time': '${_selectedDate.hour.toString().padLeft(2, '0')}:${_selectedDate.minute.toString().padLeft(2, '0')}',
         'arrive_by': false,
       };
 
       print('Sending route request to backend: $requestBody');
+      print('Formatted travel_date: ${_selectedDate.toIso8601String().split('T')[0]}');
+      print('Formatted start_time: ${_selectedDate.hour.toString().padLeft(2, '0')}:${_selectedDate.minute.toString().padLeft(2, '0')}');
 
       final response = await http
           .post(

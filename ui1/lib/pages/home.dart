@@ -75,10 +75,24 @@ class _HomePageRouteState extends State<HomePageRoute> {
               journeyData.containsKey('fromLng') && 
               journeyData.containsKey('toLat') && 
               journeyData.containsKey('toLng')) {
-            loadedJourneys.add(Journey.fromJson(journeyData));
+            print('=== LOADING JOURNEY ===');
+            print('Journey ID: ${journeyData['id']}');
+            print('Has steps key: ${journeyData.containsKey('steps')}');
+            print('Steps in JSON: ${journeyData['steps']?.length ?? "null"}');
+            if (journeyData['steps'] != null && journeyData['steps'].isNotEmpty) {
+              print('First step in JSON: ${jsonEncode(journeyData['steps'][0])}');
+            }
+            final journey = Journey.fromJson(journeyData);
+            print('After parsing: has ${journey.steps?.length ?? 0} steps');
+            if (journey.steps != null && journey.steps!.isNotEmpty) {
+              print('First parsed step: ${journey.steps![0].instructions}');
+            }
+            print('=====================');
+            loadedJourneys.add(journey);
           }
         } catch (e) {
           print('Error loading individual journey: $e');
+          print('Stack trace: ${StackTrace.current}');
           // Skip malformed journeys
         }
       }
@@ -164,6 +178,7 @@ class _HomePageRouteState extends State<HomePageRoute> {
           polylinePoints: journey.polylinePoints,
           imageUrl: journey.imageUrl,
           durationMinutes: journey.durationMinutes,
+          steps: journey.steps, // IMPORTANT: Preserve steps!
         ));
       } else {
         updatedJourneys.add(journey);

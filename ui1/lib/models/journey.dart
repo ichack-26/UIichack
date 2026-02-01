@@ -27,13 +27,17 @@ class RouteStep {
   }
 
   factory RouteStep.fromJson(Map<String, dynamic> json) {
+    // Handle empty string for line (convert to null)
+    final lineValue = json['line'];
+    final line = (lineValue == null || lineValue == '') ? null : lineValue as String;
+    
     return RouteStep(
-      mode: json['mode'] as String,
-      line: json['line'] as String?,
-      fromStation: json['from_station'] as String,
-      toStation: json['to_station'] as String,
-      durationMinutes: json['duration_minutes'] as int,
-      instructions: json['instructions'] as String,
+      mode: json['mode'] as String? ?? 'walking',
+      line: line,
+      fromStation: json['from_station'] as String? ?? '',
+      toStation: json['to_station'] as String? ?? '',
+      durationMinutes: json['duration_minutes'] as int? ?? 0,
+      instructions: json['instructions'] as String? ?? '',
     );
   }
 }

@@ -190,19 +190,33 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
       
       if (selectedRoute.rawData != null) {
         final rawData = selectedRoute.rawData!;
+        print('Raw backend data keys: ${rawData.keys}');
+        print('Raw backend data: ${jsonEncode(rawData)}');
+        
         durationMinutes = rawData['duration_minutes'] as int?;
+        print('Duration from backend: $durationMinutes minutes');
         
         final stepsData = rawData['steps'] as List<dynamic>? ?? [];
-        routeSteps = stepsData.map((stepJson) {
-          return RouteStep(
-            mode: stepJson['mode'] as String? ?? 'walking',
-            line: stepJson['line'] as String?,
-            fromStation: stepJson['from_station'] as String? ?? '',
-            toStation: stepJson['to_station'] as String? ?? '',
-            durationMinutes: stepJson['duration_minutes'] as int? ?? 0,
-            instructions: stepJson['instructions'] as String? ?? '',
-          );
-        }).toList();
+        print('Steps data from backend: ${stepsData.length} steps');
+        
+        if (stepsData.isNotEmpty) {
+          print('First step data: ${jsonEncode(stepsData[0])}');
+          routeSteps = stepsData.map((stepJson) {
+            return RouteStep(
+              mode: stepJson['mode'] as String? ?? 'walking',
+              line: stepJson['line'] as String?,
+              fromStation: stepJson['from_station'] as String? ?? '',
+              toStation: stepJson['to_station'] as String? ?? '',
+              durationMinutes: stepJson['duration_minutes'] as int? ?? 0,
+              instructions: stepJson['instructions'] as String? ?? '',
+            );
+          }).toList();
+          print('Successfully parsed ${routeSteps.length} route steps');
+        } else {
+          print('WARNING: No steps data found in backend response');
+        }
+      } else {
+        print('WARNING: selectedRoute.rawData is null');
       }
       
       // Fallback: Calculate duration if not from backend
@@ -254,9 +268,22 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
       final journeysJson = prefs.getStringList('journeys') ?? [];
       
       // Add new journey
-      final jsonStr = jsonEncode(journey.toJson());
-      print('Saving journey JSON: $jsonStr');
-      print('Saving route with ${polylinePoints.length} waypoints and ${routeSteps?.length ?? 0} steps');
+      final journeyJson = journey.toJson();
+      print('=== SAVING JOURNEY ===');
+      print('Journey ID: $journeyId');
+      print('Steps count: ${routeSteps?.length ?? 0}');
+      print('Steps in journeyJson: ${journeyJson['steps']?.length ?? "null"}');
+      if (routeSteps != null && routeSteps.isNotEmpty) {
+        print('First step object: mode=${routeSteps[0].mode}, instructions=${routeSteps[0].instructions}');
+        print('First step JSON: ${jsonEncode(routeSteps[0].toJson())}');
+      }
+      if (journeyJson['steps'] != null) {
+        print('First step in JSON: ${jsonEncode(journeyJson['steps'][0])}');
+      }
+      final jsonStr = jsonEncode(journeyJson);
+      print('Full JSON (first 500 chars): ${jsonStr.substring(0, jsonStr.length > 500 ? 500 : jsonStr.length)}');
+      print('Polyline points: ${polylinePoints.length}');
+      print('=====================');
       journeysJson.add(jsonStr);
       
       // Save back to storage

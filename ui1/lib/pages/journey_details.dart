@@ -318,6 +318,17 @@ class _JourneyDetailsPageState extends State<JourneyDetailsPage> with SingleTick
 
   Widget _buildStepsView(String dateLabel, String timeLabel) {
     final hasSteps = widget.journey.steps != null && widget.journey.steps!.isNotEmpty;
+    
+    print('=== JOURNEY DETAILS PAGE ===');
+    print('Journey ID: ${widget.journey.id}');
+    print('Steps null? ${widget.journey.steps == null}');
+    print('Steps empty? ${widget.journey.steps?.isEmpty ?? true}');
+    print('Steps count: ${widget.journey.steps?.length ?? 0}');
+    print('hasSteps: $hasSteps');
+    if (widget.journey.steps != null && widget.journey.steps!.isNotEmpty) {
+      print('First step: ${widget.journey.steps![0].instructions}');
+    }
+    print('============================');
 
     return ListView(
       padding: const EdgeInsets.all(16.0),
@@ -506,6 +517,16 @@ class _JourneyDetailsPageState extends State<JourneyDetailsPage> with SingleTick
                     style: TextStyle(
                       fontSize: 15,
                       color: Colors.grey[600],
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'This journey was created before step-by-step navigation was added. Create a new journey to see detailed route steps.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey[500],
                     ),
                     textAlign: TextAlign.center,
                   ),

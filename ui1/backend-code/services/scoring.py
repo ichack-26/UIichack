@@ -75,7 +75,9 @@ class JourneyScorer:
         reasons = []
        
         legs = journey_data.get("legs", [])
-        num_changes = sum(1 for leg in legs if leg.get("mode", {}).get("name") != "walking")
+        transport_legs = [l for l in legs if l.get("mode", {}).get("name") != "walking"]
+        num_changes = max(0, len(transport_legs) - 1)
+
        
         # Peak hour penalty
         if JourneyScorer.is_peak_hour(at):
@@ -257,7 +259,8 @@ class JourneyScorer:
         for leg in legs:
             line_name = leg.get("routeOptions", [{}])[0].get("name", "") if leg.get("routeOptions") else ""
            
-            if line_name in disruptions:
+            line_key = line_name.lower()
+            if line_key in disruptions:
                 status = disruptions[line_name]
                
                 if "Severe Delays" in status or "Part Closure" in status:
@@ -313,7 +316,7 @@ class JourneyScorer:
         if preferences.get("avoid_noise"):
             w_noise = 5.0
         if preferences.get("avoid_heat"):
-            w_heat = 50
+            w_heat = 5.0
        
         total_weight = w_crowd + w_noise + w_heat + w_reliable
        

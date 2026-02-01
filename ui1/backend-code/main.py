@@ -33,6 +33,19 @@ tfl_client = TfLClient()
 scorer = JourneyScorer()
 
 
+# ---------------------------------------------------------------------
+# LINE CLASSIFICATIONS FOR PREFERENCES
+# ---------------------------------------------------------------------
+NOISY_LINES = {"central", "northern", "victoria", "piccadilly", "bakerloo"}
+HOT_LINES = {"central", "northern", "bakerloo", "piccadilly", "victoria", "jubilee", "waterloo & city"}
+COOL_LINES = {"circle", "district", "metropolitan", "hammersmith & city", "elizabeth"}
+MAJOR_HUBS = {
+    "oxford circus", "victoria", "bank", "liverpool street",
+    "king's cross st. pancras", "kings cross", "waterloo",
+    "london bridge", "paddington", "leicester square", "green park"
+}
+
+
 @app.get("/health")
 def health_check():
     return {
@@ -54,14 +67,12 @@ def parse_line_string(line_string: str) -> List[Coordinate]:
         return []
    
     try:
-        # Remove outer brackets and split
         import json
         points = json.loads(line_string)
        
         coordinates = []
         for point in points:
             if len(point) >= 2:
-                # TfL uses [longitude, latitude] order
                 lng, lat = point[0], point[1]
                 coordinates.append(Coordinate(lat=lat, lng=lng))
        
@@ -75,12 +86,10 @@ def extract_leg_path(leg: Dict) -> List[Coordinate]:
     """Extract path coordinates from a journey leg."""
     path_data = leg.get("path", {})
    
-    # Try lineString first (most detailed)
     line_string = path_data.get("lineString")
     if line_string:
         return parse_line_string(line_string)
    
-    # Fallback: use stop points if available
     stop_points = path_data.get("stopPoints", [])
     if stop_points:
         coords = []
@@ -91,7 +100,6 @@ def extract_leg_path(leg: Dict) -> List[Coordinate]:
                 coords.append(Coordinate(lat=lat, lng=lon))
         return coords
    
-    # Final fallback: use departure and arrival points
     coords = []
     dep = leg.get("departurePoint", {})
     arr = leg.get("arrivalPoint", {})
@@ -143,7 +151,6 @@ def parse_tfl_journey(
     legs = journey_data.get("legs", [])
     duration = journey_data.get("duration", 0)
 
-    # Build datetime for scoring
     requested_datetime: Optional[datetime] = None
     if travel_date and travel_time:
         requested_datetime = datetime.combine(travel_date, travel_time)
@@ -151,7 +158,7 @@ def parse_tfl_journey(
         requested_datetime = datetime.combine(datetime.now().date(), travel_time)
 
     steps: List[RouteStep] = []
-    full_path: List[Coordinate] = []  # Combined path for entire journey
+    full_path: List[Coordinate] = []
     num_transport_legs = 0
    
     start_coords: Optional[Coordinate] = None
@@ -160,7 +167,6 @@ def parse_tfl_journey(
     for i, leg in enumerate(legs):
         mode_name = leg.get("mode", {}).get("name", "walking").lower()
 
-        # Skip tiny walking legs
         if mode_name == "walking" and leg.get("duration", 0) < 2:
             continue
 
@@ -170,23 +176,19 @@ def parse_tfl_journey(
         from_name = from_point.get("commonName", "Unknown")
         to_name = to_point.get("commonName", "Unknown")
        
-        # Extract coordinates for this leg
         leg_path = extract_leg_path(leg)
         departure_coords = get_point_coords(from_point)
         arrival_coords = get_point_coords(to_point)
        
-        # Set overall start/end coords
         if i == 0 and departure_coords:
             start_coords = departure_coords
         if arrival_coords:
             end_coords = arrival_coords
        
-        # Add to full path (avoid duplicates at leg boundaries)
         for coord in leg_path:
             if not full_path or (coord.lat != full_path[-1].lat or coord.lng != full_path[-1].lng):
                 full_path.append(coord)
        
-        # If leg_path is empty, at least add start/end points
         if not leg_path:
             if departure_coords and (not full_path or
                 (departure_coords.lat != full_path[-1].lat or departure_coords.lng != full_path[-1].lng)):
@@ -223,70 +225,33 @@ def parse_tfl_journey(
 
     number_of_changes = max(0, num_transport_legs - 1)
 
-    # -----------------------------------------------------------------
-    # SCORING (time-aware)
-    # -----------------------------------------------------------------
+    # SCORING
     crowding_score, crowd_level, crowd_desc = scorer.score_crowding(
-        journey_data,
-        preferences,
-        disruptions,
-        at=requested_datetime
+        journey_data, preferences, disruptions, at=requested_datetime
     )
-
     noise_score, noise_level, noise_desc = scorer.score_noise(
-        journey_data,
-        preferences
+        journey_data, preferences
     )
-
     heat_score, heat_level, heat_desc = scorer.score_heat(
-        journey_data,
-        preferences,
-        at=requested_datetime
+        journey_data, preferences, at=requested_datetime
     )
-
     reliability_score, rel_level, rel_desc = scorer.score_reliability(
-        journey_data,
-        preferences,
-        disruptions
+        journey_data, preferences, disruptions
     )
 
     overall_score = scorer.calculate_overall_score(
-        crowding_score,
-        noise_score,
-        heat_score,
-        reliability_score,
-        preferences
+        crowding_score, noise_score, heat_score, reliability_score, preferences
     )
 
     warnings = scorer.generate_warnings(
-        journey_data,
-        disruptions,
-        crowding_score,
-        heat_score,
-        at=requested_datetime
+        journey_data, disruptions, crowding_score, heat_score, at=requested_datetime
     )
 
     sensory_summary = SensorySummary(
-        crowding={
-            "score": crowding_score,
-            "level": crowd_level,
-            "description": crowd_desc
-        },
-        noise={
-            "score": noise_score,
-            "level": noise_level,
-            "description": noise_desc
-        },
-        heat={
-            "score": heat_score,
-            "level": heat_level,
-            "description": heat_desc
-        },
-        reliability={
-            "score": reliability_score,
-            "level": rel_level,
-            "description": rel_desc
-        }
+        crowding={"score": crowding_score, "level": crowd_level, "description": crowd_desc},
+        noise={"score": noise_score, "level": noise_level, "description": noise_desc},
+        heat={"score": heat_score, "level": heat_level, "description": heat_desc},
+        reliability={"score": reliability_score, "level": rel_level, "description": rel_desc}
     )
 
     return Route(
@@ -307,6 +272,89 @@ def parse_tfl_journey(
 
 
 # ---------------------------------------------------------------------
+# APPLY PREFERENCE PENALTIES AND BONUSES
+# ---------------------------------------------------------------------
+def apply_preference_adjustments(routes: List[Route], preferences: Dict) -> List[Route]:
+    """
+    Apply heavy penalties and bonuses based on user preferences.
+    This makes preferences have a REAL impact on route selection.
+    """
+   
+    for r in routes:
+        route_lines = {s.line.lower() for s in r.steps if s.line}
+        route_stations = set()
+        for s in r.steps:
+            route_stations.add(s.from_station.lower())
+            route_stations.add(s.to_station.lower())
+       
+        # ----- AVOID NOISE -----
+        if preferences.get("avoid_noise"):
+            noisy_lines_used = route_lines & NOISY_LINES
+            if noisy_lines_used:
+                penalty = len(noisy_lines_used) * 20  # -20 per noisy line
+                r.overall_score -= penalty
+                logger.info(f"{r.journey_id}: -{penalty} for noisy lines {noisy_lines_used}")
+            else:
+                r.overall_score += 15  # Bonus for avoiding all noisy lines
+                logger.info(f"{r.journey_id}: +15 bonus for no noisy lines")
+       
+        # ----- AVOID HEAT -----
+        if preferences.get("avoid_heat"):
+            hot_lines_used = route_lines & HOT_LINES
+            cool_lines_used = route_lines & COOL_LINES
+            has_bus = any("bus" in s.mode for s in r.steps)
+           
+            if hot_lines_used:
+                penalty = len(hot_lines_used) * 18  # -18 per hot line
+                r.overall_score -= penalty
+                logger.info(f"{r.journey_id}: -{penalty} for hot lines {hot_lines_used}")
+           
+            if cool_lines_used:
+                bonus = len(cool_lines_used) * 15  # +15 per cool line
+                r.overall_score += bonus
+                logger.info(f"{r.journey_id}: +{bonus} bonus for cool lines {cool_lines_used}")
+           
+            if has_bus:
+                r.overall_score += 12  # Buses are cooler
+                logger.info(f"{r.journey_id}: +12 bonus for bus (cooler)")
+       
+        # ----- AVOID CROWDS -----
+        if preferences.get("avoid_crowds"):
+            hubs_in_route = route_stations & MAJOR_HUBS
+            if len(hubs_in_route) > 0:
+                penalty = len(hubs_in_route) * 12  # -12 per major hub
+                r.overall_score -= penalty
+                logger.info(f"{r.journey_id}: -{penalty} for major hubs {hubs_in_route}")
+            else:
+                r.overall_score += 20  # Big bonus for avoiding all major hubs
+                logger.info(f"{r.journey_id}: +20 bonus for avoiding major hubs")
+       
+        # ----- PREFER BUSES -----
+        if preferences.get("prefer_buses"):
+            has_bus = any("bus" in s.mode for s in r.steps)
+            if has_bus:
+                r.overall_score += 30  # Strong preference for buses
+                logger.info(f"{r.journey_id}: +30 bonus for bus route")
+            else:
+                r.overall_score -= 10  # Slight penalty for no bus
+                logger.info(f"{r.journey_id}: -10 penalty for no bus")
+       
+        # ----- MINIMISE CHANGES -----
+        if preferences.get("minimise_changes"):
+            if r.number_of_changes == 0:
+                r.overall_score += 35  # Big bonus for direct
+                logger.info(f"{r.journey_id}: +35 bonus for direct route")
+            elif r.number_of_changes == 1:
+                r.overall_score += 15
+                logger.info(f"{r.journey_id}: +15 bonus for 1 change")
+            elif r.number_of_changes >= 3:
+                r.overall_score -= 20  # Penalty for many changes
+                logger.info(f"{r.journey_id}: -20 penalty for {r.number_of_changes} changes")
+   
+    return routes
+
+
+# ---------------------------------------------------------------------
 # ROUTE ENDPOINT
 # ---------------------------------------------------------------------
 @app.post("/route", response_model=RouteResponse)
@@ -314,6 +362,12 @@ async def plan_route(request: RouteRequest):
     try:
         logger.info(f"Route request: {request.origin} → {request.destination}")
         logger.info(f"Date: {request.travel_date}, Time: {request.start_time}, Arrive by: {request.arrive_by}")
+        logger.info(f"=== PREFERENCES ===")
+        logger.info(f"  avoid_crowds: {request.preferences.avoid_crowds}")
+        logger.info(f"  avoid_noise: {request.preferences.avoid_noise}")
+        logger.info(f"  avoid_heat: {request.preferences.avoid_heat}")
+        logger.info(f"  prefer_buses: {request.preferences.prefer_buses}")
+        logger.info(f"  minimise_changes: {request.preferences.minimise_changes}")
 
         journey_data = tfl_client.get_journey_results(
             from_location=request.origin,
@@ -354,22 +408,25 @@ async def plan_route(request: RouteRequest):
         if not routes:
             return RouteResponse(success=False, error="No valid routes parsed")
 
-        # Apply preference bonuses
-        if preferences_dict.get("prefer_buses"):
-            fastest = min(r.duration_minutes for r in routes)
-            for r in routes:
-                if any("bus" in s.mode for s in r.steps) and r.duration_minutes <= fastest + 10:
-                    r.overall_score += 15
+        # Log initial scores
+        logger.info("=== SCORES BEFORE PREFERENCE ADJUSTMENTS ===")
+        for r in routes:
+            lines = [s.line for s in r.steps if s.line]
+            logger.info(f"{r.journey_id}: score={r.overall_score:.1f}, lines={lines}")
 
-        if preferences_dict.get("minimise_changes"):
-            for r in routes:
-                if r.number_of_changes == 0:
-                    r.overall_score += 20
-                elif r.number_of_changes == 1:
-                    r.overall_score += 10
+        # Apply preference penalties and bonuses
+        routes = apply_preference_adjustments(routes, preferences_dict)
 
+        # Log adjusted scores
+        logger.info("=== SCORES AFTER PREFERENCE ADJUSTMENTS ===")
+        for r in routes:
+            logger.info(f"{r.journey_id}: score={r.overall_score:.1f}")
+
+        # Sort by score and mark recommended
         routes.sort(key=lambda r: r.overall_score, reverse=True)
         routes[0].recommended = True
+
+        logger.info(f"=== RECOMMENDED: {routes[0].journey_id} (score: {routes[0].overall_score:.1f}) ===")
 
         primary = routes[0]
         alternative = None
@@ -380,7 +437,7 @@ async def plan_route(request: RouteRequest):
             r_lines = {s.line for s in r.steps if s.line}
             overlap = len(primary_lines & r_lines) / max(len(primary_lines), 1) if primary_lines else 0
            
-            if overlap < 0.5:  # Less than 50% line overlap
+            if overlap < 0.5:
                 alternative = r
                 break
 

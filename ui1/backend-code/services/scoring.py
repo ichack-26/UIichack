@@ -309,11 +309,11 @@ class JourneyScorer:
        
         # Increase weights for enabled preferences
         if preferences.get("avoid_crowds"):
-            w_crowd = 2.0
+            w_crowd = 5.0
         if preferences.get("avoid_noise"):
-            w_noise = 2.0
+            w_noise = 5.0
         if preferences.get("avoid_heat"):
-            w_heat = 2.0
+            w_heat = 50
        
         total_weight = w_crowd + w_noise + w_heat + w_reliable
        

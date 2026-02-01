@@ -898,6 +898,8 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
           'avoid_heat': false, // Not exposed in UI yet
           'prefer_buses': false, // Not exposed in UI yet
           'minimise_changes': false, // Not exposed in UI yet
+          'wheelchair_accessible': _wheelchairAccessible,
+          'avoid_stairs': _avoidStairs,
         },
         'travel_date': _selectedDate.toIso8601String().split('T')[0],
         'start_time': '${_selectedDate.hour.toString().padLeft(2, '0')}:${_selectedDate.minute.toString().padLeft(2, '0')}',
@@ -905,6 +907,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
       };
 
       print('Sending route request to backend: $requestBody');
+      print('Preferences: avoid_crowds=$_avoidClaustrophobic, wheelchair_accessible=$_wheelchairAccessible, avoid_stairs=$_avoidStairs');
       print('Formatted travel_date: ${_selectedDate.toIso8601String().split('T')[0]}');
       print('Formatted start_time: ${_selectedDate.hour.toString().padLeft(2, '0')}:${_selectedDate.minute.toString().padLeft(2, '0')}');
 

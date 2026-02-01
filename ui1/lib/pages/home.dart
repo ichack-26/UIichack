@@ -31,6 +31,7 @@ class _HomePageRouteState extends State<HomePageRoute> {
   final Map<String, String> _locationNameCache = {};
   bool _isResolvingLocations = false;
   final ScrollController _scrollController = ScrollController();
+  final GlobalKey _listKey = GlobalKey();
   final GlobalKey _todayKey = GlobalKey();
   final GlobalKey _upcomingKey = GlobalKey();
   final GlobalKey _historyKey = GlobalKey();
@@ -48,14 +49,33 @@ class _HomePageRouteState extends State<HomePageRoute> {
   }
 
   void _scrollToSection(GlobalKey key) {
-    final context = key.currentContext;
-    if (context == null) return;
-    Scrollable.ensureVisible(
-      context,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-      alignment: 0.05,
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final context = key.currentContext;
+      if (context == null) return;
+      if (!_scrollController.hasClients) return;
+
+      final listContext = _listKey.currentContext;
+      if (listContext == null) return;
+
+      final listBox = listContext.findRenderObject() as RenderBox?;
+      final targetBox = context.findRenderObject() as RenderBox?;
+      if (listBox == null || targetBox == null) return;
+
+      final listTop = listBox.localToGlobal(Offset.zero).dy;
+      final targetTop = targetBox.localToGlobal(Offset.zero).dy;
+      final offsetInList = targetTop - listTop;
+      final targetOffset = _scrollController.offset + offsetInList - 8.0;
+      final clamped = targetOffset.clamp(
+        0.0,
+        _scrollController.position.maxScrollExtent,
+      );
+
+      _scrollController.animateTo(
+        clamped,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOut,
+      );
+    });
   }
 
   Future<void> _loadJourneys() async {
@@ -378,87 +398,94 @@ class _HomePageRouteState extends State<HomePageRoute> {
               return Stack(
                 children: [
                   ListView(
+                    key: _listKey,
                     controller: _scrollController,
                     padding: const EdgeInsets.symmetric(vertical: 24.0),
                     children: [
                   // Journeys happening today section
-                  if (todayJourneys.isNotEmpty) ...[
-                    Padding(
-                      key: _todayKey,
-                      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 4,
-                            height: 24,
-                            decoration: BoxDecoration(
-                              color: Colors.green,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
+                  Padding(
+                    key: _todayKey,
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 4,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: Colors.green,
+                            borderRadius: BorderRadius.circular(2),
                           ),
-                          const SizedBox(width: 12),
-                          const Text(
-                            'Happening Today',
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'Happening Today',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade100,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '${todayJourneys.length}',
                             style: TextStyle(
-                              fontSize: 22,
+                              fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              color: Colors.black87,
+                              color: Colors.green.shade700,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.green.shade100,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '${todayJourneys.length}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.green.shade700,
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (todayJourneys.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 20.0),
+                      child: Text(
+                        'No journeys today',
+                        style: TextStyle(color: Colors.grey, fontSize: 15),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    ...todayJourneys.map((j) => Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
-                      child: Dismissible(
-                        key: ValueKey('journey_${j.id}'),
-                        direction: DismissDirection.startToEnd,
-                        background: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.red.shade400,
-                            borderRadius: BorderRadius.circular(16.0),
-                          ),
-                          alignment: Alignment.centerLeft,
-                          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                          child: const Icon(Icons.delete, color: Colors.white),
+                  ...todayJourneys.map((j) => Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
+                    child: Dismissible(
+                      key: ValueKey('journey_${j.id}'),
+                      direction: DismissDirection.startToEnd,
+                      background: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade400,
+                          borderRadius: BorderRadius.circular(16.0),
                         ),
-                        onDismissed: (_) => _deleteJourney(j),
-                        child: TravelRouteSummaryWidget(
-                          travelDate: j.date,
-                          fromLocation: _locationNameCache['${j.id}_from'] ?? j.from,
-                          toLocation: _locationNameCache['${j.id}_to'] ?? j.to,
-                          isUpcoming: j.date.isAfter(DateTime.now()),
-                          isOngoing: j.isOngoing,
-                          imageUrl: j.imageUrl,
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) => JourneyDetailsPage(journey: j),
-                              ),
-                            );
-                          },
-                        ),
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                        child: const Icon(Icons.delete, color: Colors.white),
                       ),
-                    )),
-                    const SizedBox(height: 32),
-                  ],
+                      onDismissed: (_) => _deleteJourney(j),
+                      child: TravelRouteSummaryWidget(
+                        travelDate: j.date,
+                        fromLocation: _locationNameCache['${j.id}_from'] ?? j.from,
+                        toLocation: _locationNameCache['${j.id}_to'] ?? j.to,
+                        isUpcoming: j.date.isAfter(DateTime.now()),
+                        isOngoing: j.isOngoing,
+                        imageUrl: j.imageUrl,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => JourneyDetailsPage(journey: j),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  )),
+                  const SizedBox(height: 32),
                   
                   // Upcoming journeys section
                   Padding(

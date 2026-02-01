@@ -17,7 +17,6 @@ class RoutePlannerRoute extends StatefulWidget {
 }
 
 class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
-  final MapController _mapController = MapController();
   final TextEditingController _searchController = TextEditingController();
   late DateTime _selectedDate;
   LatLng? _fromLocation;
@@ -25,8 +24,6 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
   String _fromAddress = '';
   String _toAddress = '';
   List<Marker> _markers = [];
-  bool _selectingStart = false;
-  bool _selectingDestination = false;
   List<SearchResult> _searchResults = [];
   bool _isSearching = false;
   Timer? _debounce;
@@ -45,7 +42,6 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
   // Routes state
   List<Route> _routes = [];
   int? _selectedRouteIndex;
-  List<Polyline> _polylines = [];
 
   // UI state for collapsible preferences
   bool _prefsExpanded = false;
@@ -352,7 +348,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          _mapController.move(_userLocation, 14);
+          // No in-page map; map selection is handled in a separate picker.
         }
       });
       print('User location obtained: $_userLocation');
@@ -394,328 +390,264 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
         title: const Text('Route Planner'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
-      body: Column(
-        children: [
-          // Search and input section
-          Container(
-            padding: const EdgeInsets.all(16.0),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.2),
-                  spreadRadius: 1,
-                  blurRadius: 5,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Start Place
-                InkWell(
-                  onTap: () => _showLocationPicker(true),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.blue),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.trip_origin, color: Colors.blue),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _fromAddress.isEmpty ? 'Select Start Place' : _fromAddress,
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: _fromAddress.isEmpty ? Colors.grey : Colors.black,
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            // Search and input section
+            Container(
+              padding: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.2),
+                    spreadRadius: 1,
+                    blurRadius: 5,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Start Place
+                  InkWell(
+                    onTap: () => _showLocationPicker(true),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.blue),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.trip_origin, color: Colors.blue),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _fromAddress.isEmpty ? 'Select Start Place' : _fromAddress,
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: _fromAddress.isEmpty ? Colors.grey : Colors.black,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        const Icon(Icons.search, color: Colors.grey),
-                      ],
+                          const Icon(Icons.search, color: Colors.grey),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                // Destination Place
-                InkWell(
-                  onTap: () => _showLocationPicker(false),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.red),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.location_on, color: Colors.red),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _toAddress.isEmpty ? 'Select Destination Place' : _toAddress,
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: _toAddress.isEmpty ? Colors.grey : Colors.black,
+                  const SizedBox(height: 12),
+                  // Destination Place
+                  InkWell(
+                    onTap: () => _showLocationPicker(false),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.red),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.location_on, color: Colors.red),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _toAddress.isEmpty ? 'Select Destination Place' : _toAddress,
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: _toAddress.isEmpty ? Colors.grey : Colors.black,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        const Icon(Icons.search, color: Colors.grey),
-                      ],
+                          const Icon(Icons.search, color: Colors.grey),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                // Departure Time
-                InkWell(
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: _selectedDate,
-                      firstDate: DateTime.now(),
-                      lastDate: DateTime(2101),
-                    );
-                    if (date != null) {
-                      final time = await showTimePicker(
+                  const SizedBox(height: 12),
+                  // Departure Time
+                  InkWell(
+                    onTap: () async {
+                      final date = await showDatePicker(
                         context: context,
-                        initialTime: TimeOfDay.now(),
+                        initialDate: _selectedDate,
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime(2101),
                       );
-                      if (time != null) {
-                        setState(() {
-                          _selectedDate = DateTime(
-                            date.year,
-                            date.month,
-                            date.day,
-                            time.hour,
-                            time.minute,
-                          );
-                        });
-                      }
-                    }
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.access_time, color: Colors.grey),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            '${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year} ${_selectedDate.hour}:${_selectedDate.minute.toString().padLeft(2, '0')}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              color: Colors.black,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Collapsible Preferences
-                Theme(
-                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                  child: ExpansionTile(
-                    key: const Key('preferences_tile'),
-                    initiallyExpanded: _prefsExpanded,
-                    onExpansionChanged: (v) => setState(() => _prefsExpanded = v),
-                    leading: const Icon(Icons.filter_list),
-                    title: const Text('Preferences'),
-                    subtitle: Text(_preferencesSummary),
-                    children: [
-                      CheckboxListTile(
-                        value: _avoidClaustrophobic,
-                        onChanged: (v) => setState(() => _avoidClaustrophobic = v ?? false),
-                        title: const Text('Avoid claustrophobic areas'),
-                        subtitle: const Text('Avoid narrow tunnels or enclosed corridors'),
-                        secondary: const Icon(Icons.airline_stops_outlined),
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-
-                      CheckboxListTile(
-                        value: _requireLift,
-                        onChanged: (v) => setState(() => _requireLift = v ?? false),
-                        title: const Text('Require lift/elevator access'),
-                        subtitle: const Text('Prefer routes with elevator access'),
-                        secondary: const Icon(Icons.elevator),
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-
-                      CheckboxListTile(
-                        value: _avoidStairs,
-                        onChanged: (v) => setState(() => _avoidStairs = v ?? false),
-                        title: const Text('Avoid stairs'),
-                        subtitle: const Text('Prefer ramps and level paths'),
-                        secondary: const Icon(Icons.stairs),
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-
-                      CheckboxListTile(
-                        value: _wheelchairAccessible,
-                        onChanged: (v) => setState(() => _wheelchairAccessible = v ?? false),
-                        title: const Text('Wheelchair-accessible routes only'),
-                        subtitle: const Text('Filter to fully accessible options'),
-                        secondary: const Icon(Icons.accessible),
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-
-                      CheckboxListTile(
-                        value: _avoidNoise,
-                        onChanged: (v) => setState(() => _avoidNoise = v ?? false),
-                        title: const Text('Avoid noisy areas'),
-                        subtitle: const Text('Prefer quieter routes'),
-                        secondary: const Icon(Icons.volume_off),
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-
-                      CheckboxListTile(
-                        value: _avoidHeat,
-                        onChanged: (v) => setState(() => _avoidHeat = v ?? false),
-                        title: const Text('Avoid heat'),
-                        subtitle: const Text('Prefer shaded areas'),
-                        secondary: const Icon(Icons.wb_sunny),
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-
-                      CheckboxListTile(
-                        value: _preferBuses,
-                        onChanged: (v) => setState(() => _preferBuses = v ?? false),
-                        title: const Text('Prefer buses'),
-                        subtitle: const Text('Favor bus routes over other transport'),
-                        secondary: const Icon(Icons.directions_bus),
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-
-                      CheckboxListTile(
-                        value: _minimiseChanges,
-                        onChanged: (v) => setState(() => _minimiseChanges = v ?? false),
-                        title: const Text('Minimize transfers'),
-                        subtitle: const Text('Prefer routes with fewer changes'),
-                        secondary: const Icon(Icons.compare_arrows),
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-
-                      const SizedBox(height: 4),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 8),
-                // Go Button
-                ElevatedButton(
-                  onPressed: (_fromLocation != null && _toLocation != null)
-                      ? _planRoute
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey[300],
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text(
-                    'Plan Route',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Map section
-          Expanded(
-            child: Stack(
-              children: [
-                FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: _userLocation,
-                    initialZoom: 14,
-                    onTap: (tapPosition, point) {
-                      if (_selectingStart) {
-                        if (!_ensureUkSelection(point, true)) {
-                          return;
+                      if (date != null) {
+                        final time = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay.now(),
+                        );
+                        if (time != null) {
+                          setState(() {
+                            _selectedDate = DateTime(
+                              date.year,
+                              date.month,
+                              date.day,
+                              time.hour,
+                              time.minute,
+                            );
+                          });
                         }
-                        setState(() {
-                          _fromLocation = point;
-                          _fromAddress = 'Lat: ${point.latitude.toStringAsFixed(4)}, Lng: ${point.longitude.toStringAsFixed(4)}';
-                          _updateMarkers();
-                          _selectingStart = false;
-                        });
-                      } else if (_selectingDestination) {
-                        if (!_ensureUkSelection(point, false)) {
-                          return;
-                        }
-                        setState(() {
-                          _toLocation = point;
-                          _toAddress = 'Lat: ${point.latitude.toStringAsFixed(4)}, Lng: ${point.longitude.toStringAsFixed(4)}';
-                          _updateMarkers();
-                          _selectingDestination = false;
-                        });
                       }
                     },
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.example.ui1',
-                      maxNativeZoom: 19,
-                      maxZoom: 19,
-                    ),
-                    PolylineLayer(
-                      polylines: _polylines,
-                    ),
-                    MarkerLayer(
-                      markers: _markers,
-                    ),
-                  ],
-                ),
-                if (_selectingStart || _selectingDestination)
-                  Positioned(
-                    top: 16,
-                    left: 16,
-                    right: 16,
                     child: Container(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        border: Border.all(color: Colors.grey),
                         borderRadius: BorderRadius.circular(8),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.access_time, color: Colors.grey),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              '${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year} ${_selectedDate.hour}:${_selectedDate.minute.toString().padLeft(2, '0')}',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                color: Colors.black,
+                              ),
+                            ),
                           ),
                         ],
                       ),
-                      child: Text(
-                        _selectingStart 
-                          ? 'Tap on the map to select start location'
-                          : 'Tap on the map to select destination',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
                     ),
                   ),
-              ],
+                  const SizedBox(height: 16),
+        
+                  // Collapsible Preferences
+                  Theme(
+                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                    child: ExpansionTile(
+                      key: const Key('preferences_tile'),
+                      initiallyExpanded: _prefsExpanded,
+                      onExpansionChanged: (v) => setState(() => _prefsExpanded = v),
+                      leading: const Icon(Icons.filter_list),
+                      title: const Text('Preferences'),
+                      subtitle: Text(_preferencesSummary),
+                      children: [
+                        CheckboxListTile(
+                          value: _avoidClaustrophobic,
+                          onChanged: (v) => setState(() => _avoidClaustrophobic = v ?? false),
+                          title: const Text('Avoid claustrophobic areas'),
+                          subtitle: const Text('Avoid narrow tunnels or enclosed corridors'),
+                          secondary: const Icon(Icons.airline_stops_outlined),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+        
+                        CheckboxListTile(
+                          value: _requireLift,
+                          onChanged: (v) => setState(() => _requireLift = v ?? false),
+                          title: const Text('Require lift/elevator access'),
+                          subtitle: const Text('Prefer routes with elevator access'),
+                          secondary: const Icon(Icons.elevator),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+        
+                        CheckboxListTile(
+                          value: _avoidStairs,
+                          onChanged: (v) => setState(() => _avoidStairs = v ?? false),
+                          title: const Text('Avoid stairs'),
+                          subtitle: const Text('Prefer ramps and level paths'),
+                          secondary: const Icon(Icons.stairs),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+        
+                        CheckboxListTile(
+                          value: _wheelchairAccessible,
+                          onChanged: (v) => setState(() => _wheelchairAccessible = v ?? false),
+                          title: const Text('Wheelchair-accessible routes only'),
+                          subtitle: const Text('Filter to fully accessible options'),
+                          secondary: const Icon(Icons.accessible),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+        
+                        CheckboxListTile(
+                          value: _avoidNoise,
+                          onChanged: (v) => setState(() => _avoidNoise = v ?? false),
+                          title: const Text('Avoid noisy areas'),
+                          subtitle: const Text('Prefer quieter routes'),
+                          secondary: const Icon(Icons.volume_off),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+        
+                        CheckboxListTile(
+                          value: _avoidHeat,
+                          onChanged: (v) => setState(() => _avoidHeat = v ?? false),
+                          title: const Text('Avoid heat'),
+                          subtitle: const Text('Prefer shaded areas'),
+                          secondary: const Icon(Icons.wb_sunny),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+        
+                        CheckboxListTile(
+                          value: _preferBuses,
+                          onChanged: (v) => setState(() => _preferBuses = v ?? false),
+                          title: const Text('Prefer buses'),
+                          subtitle: const Text('Favor bus routes over other transport'),
+                          secondary: const Icon(Icons.directions_bus),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+        
+                        CheckboxListTile(
+                          value: _minimiseChanges,
+                          onChanged: (v) => setState(() => _minimiseChanges = v ?? false),
+                          title: const Text('Minimize transfers'),
+                          subtitle: const Text('Prefer routes with fewer changes'),
+                          secondary: const Icon(Icons.compare_arrows),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+        
+                        const SizedBox(height: 4),
+                      ],
+                    ),
+                  ),
+        
+                  const SizedBox(height: 8),
+                  // Go Button
+                  ElevatedButton(
+                    onPressed: (_fromLocation != null && _toLocation != null)
+                        ? _planRoute
+                        : null,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: Colors.grey[300],
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text(
+                      'Plan Route',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.map_outlined, size: 64, color: Colors.grey.shade400),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Map opens when you tap "Select from Map"',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -766,6 +698,32 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
           ),
         );
       }
+    });
+  }
+
+  Future<void> _openMapPicker(bool isStart) async {
+    final picked = await Navigator.of(context).push<LatLng>(
+      MaterialPageRoute(
+        builder: (context) => MapPickerPage(
+          initialLocation: _userLocation,
+          isStart: isStart,
+          existingMarkers: _markers,
+        ),
+      ),
+    );
+
+    if (picked == null) return;
+    if (!_ensureUkSelection(picked, isStart)) return;
+
+    setState(() {
+      if (isStart) {
+        _fromLocation = picked;
+        _fromAddress = 'Lat: ${picked.latitude.toStringAsFixed(4)}, Lng: ${picked.longitude.toStringAsFixed(4)}';
+      } else {
+        _toLocation = picked;
+        _toAddress = 'Lat: ${picked.latitude.toStringAsFixed(4)}, Lng: ${picked.longitude.toStringAsFixed(4)}';
+      }
+      _updateMarkers();
     });
   }
 
@@ -895,7 +853,6 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
               onRouteSelected: (routeIndex) {
                 setState(() {
                   _selectedRouteIndex = routeIndex;
-                  _updateRoutePolylines();
                 });
               },
               onContinue: _saveJourneyToStorage,
@@ -904,6 +861,10 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                 requireLift: _requireLift,
                 avoidStairs: _avoidStairs,
                 wheelchairAccessible: _wheelchairAccessible,
+                avoidNoise: _avoidNoise,
+                avoidHeat: _avoidHeat,
+                preferBuses: _preferBuses,
+                minimiseChanges: _minimiseChanges,
               ),
             ),
           ),
@@ -925,7 +886,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
 
   Future<List<Route>> _fetchRoutesFromBackend(String fromPostcode, String toPostcode) async {
     try {
-      final url = Uri.parse('http://172.30.111.204:8000/route');
+      final url = Uri.parse('http://172.30.185.25:8000/route');
 
       print("Going from $fromPostcode to $toPostcode");
       
@@ -1088,14 +1049,6 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
       ),
       rawData: routeData, // Store raw backend data
     );
-  }
-
-  void _updateRoutePolylines() {
-    _polylines = [];
-    if (_selectedRouteIndex != null && _selectedRouteIndex! < _routes.length) {
-      final selectedRoute = _routes[_selectedRouteIndex!];
-      _polylines = [selectedRoute.polyline];
-    }
   }
 
   List<Route> _generateMockRoutes() {
@@ -1385,7 +1338,6 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                                 }
                                 _updateMarkers();
                               });
-                              _mapController.move(location, 14);
                               Navigator.of(context).pop();
                             },
                           ),
@@ -1409,16 +1361,9 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
                         child: ElevatedButton.icon(
                         onPressed: () {
                           Navigator.of(context).pop();
-                          // Use Future.delayed to ensure modal is fully closed
                           Future.delayed(const Duration(milliseconds: 100), () {
                             if (mounted) {
-                              setState(() {
-                                if (isStart) {
-                                  _selectingStart = true;
-                                } else {
-                                  _selectingDestination = true;
-                                }
-                              });
+                              _openMapPicker(isStart);
                             }
                           });
                         },
@@ -1460,7 +1405,16 @@ class FullscreenMapPage extends StatefulWidget {
   final List<Route> routes;
   final Function(int)? onRouteSelected;
   final Future<void> Function()? onContinue;
-  final ({bool avoidClaustrophobic, bool requireLift, bool avoidStairs, bool wheelchairAccessible})? preferences;
+  final ({
+    bool avoidClaustrophobic,
+    bool requireLift,
+    bool avoidStairs,
+    bool wheelchairAccessible,
+    bool avoidNoise,
+    bool avoidHeat,
+    bool preferBuses,
+    bool minimiseChanges,
+  })? preferences;
 
   const FullscreenMapPage({
     required this.markers,
@@ -1519,163 +1473,177 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
               ),
             ],
           ),
-          // Route selection bottom sheet
-          Positioned.fill(
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: DraggableScrollableSheet(
-                initialChildSize: 0.35,
-                minChildSize: 0.2,
-                maxChildSize: 0.75,
-                builder: (context, scrollController) {
-                  return Material(
-                    elevation: 12,
-                    color: Theme.of(context).scaffoldBackgroundColor,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                    child: Padding(
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 12,
+            child: SafeArea(
+              top: false,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.92),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: SizedBox(
+                    height: 300,
+                    child: ListView(
                       padding: const EdgeInsets.only(top: 8.0, left: 16, right: 16, bottom: 16),
-                      child: ListView(
-                        controller: scrollController,
+                      children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[400],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Center(
-                            child: Container(
-                              width: 40,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: Colors.grey[400],
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text('Suggested routes', style: Theme.of(context).textTheme.titleMedium),
-                              Text('${widget.routes.length} options', style: Theme.of(context).textTheme.bodySmall),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          ...widget.routes.asMap().entries.map((entry) {
-                            final index = entry.key;
-                            final route = entry.value;
-                            final isSelected = _selectedRouteIndex == index;
-                            final routeColor = route.polyline.color;
-
-                            return InkWell(
-                              onTap: () {
-                                setState(() {
-                                  _selectedRouteIndex = index;
-                                });
-                                if (widget.onRouteSelected != null) {
-                                  widget.onRouteSelected!(index);
-                                }
-                              },
-                              borderRadius: BorderRadius.circular(16),
-                              child: Container(
-                                margin: const EdgeInsets.only(bottom: 10),
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: isSelected ? routeColor.withAlpha(26) : Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: isSelected ? routeColor : Colors.grey.shade200,
-                                    width: isSelected ? 2 : 1,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.04),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Container(
-                                      width: 8,
-                                      height: 56,
-                                      decoration: BoxDecoration(
-                                        color: routeColor,
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  route.name,
-                                                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                                        fontWeight: FontWeight.w600,
-                                                      ),
-                                                ),
-                                              ),
-                                              if (isSelected)
-                                                Icon(Icons.check_circle, color: routeColor, size: 20),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            route.description,
-                                            style: Theme.of(context).textTheme.bodySmall,
-                                            maxLines: 3,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                          const SizedBox(height: 8),
-                          Text('Preferences used:', style: Theme.of(context).textTheme.bodyMedium),
-                          const SizedBox(height: 6),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 6,
-                            children: [
-                              if (widget.preferences?.avoidClaustrophobic ?? false) Chip(label: const Text('Avoid claustrophobic')),
-                              if (widget.preferences?.requireLift ?? false) Chip(label: const Text('Require lift')),
-                              if (widget.preferences?.avoidStairs ?? false) Chip(label: const Text('Avoid stairs')),
-                              if (widget.preferences?.wheelchairAccessible ?? false) Chip(label: const Text('Wheelchair only')),
-                              if ((widget.preferences?.avoidClaustrophobic ?? false) == false &&
-                                  (widget.preferences?.requireLift ?? false) == false &&
-                                  (widget.preferences?.avoidStairs ?? false) == false &&
-                                  (widget.preferences?.wheelchairAccessible ?? false) == false)
-                                const Chip(label: Text('None')),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          ElevatedButton.icon(
-                            onPressed: () async {
-                              if (widget.onContinue != null) {
-                                await widget.onContinue!();
-                              }
-                              Navigator.of(context).pop();
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            icon: const Icon(Icons.check_circle_outline),
-                            label: const Text('Use selected route'),
-                          ),
+                          Text('Suggested routes', style: Theme.of(context).textTheme.titleMedium),
+                          Text('${widget.routes.length} options', style: Theme.of(context).textTheme.bodySmall),
                         ],
                       ),
-                    ),
-                  );
-                },
+                      const SizedBox(height: 12),
+                      ...widget.routes.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final route = entry.value;
+                        final isSelected = _selectedRouteIndex == index;
+                        final routeColor = route.polyline.color;
+
+                        return InkWell(
+                          onTap: () {
+                            setState(() {
+                              _selectedRouteIndex = index;
+                            });
+                            if (widget.onRouteSelected != null) {
+                              widget.onRouteSelected!(index);
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: isSelected ? routeColor.withAlpha(26) : Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isSelected ? routeColor : Colors.grey.shade200,
+                                width: isSelected ? 2 : 1,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.04),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    color: routeColor,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              route.name,
+                                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                            ),
+                                          ),
+                                          if (isSelected)
+                                            Icon(Icons.check_circle, color: routeColor, size: 20),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        route.description,
+                                        style: Theme.of(context).textTheme.bodySmall,
+                                        maxLines: 3,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                      const SizedBox(height: 8),
+                      Text('Preferences used:', style: Theme.of(context).textTheme.bodyMedium),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [
+                          if (widget.preferences?.avoidClaustrophobic ?? false) Chip(label: const Text('Avoid claustrophobic')),
+                          if (widget.preferences?.requireLift ?? false) Chip(label: const Text('Require lift')),
+                          if (widget.preferences?.avoidStairs ?? false) Chip(label: const Text('Avoid stairs')),
+                          if (widget.preferences?.wheelchairAccessible ?? false) Chip(label: const Text('Wheelchair only')),
+                          if (widget.preferences?.avoidNoise ?? false) Chip(label: const Text('Avoid noise')),
+                          if (widget.preferences?.avoidHeat ?? false) Chip(label: const Text('Avoid heat')),
+                          if (widget.preferences?.preferBuses ?? false) Chip(label: const Text('Prefer buses')),
+                          if (widget.preferences?.minimiseChanges ?? false) Chip(label: const Text('Minimise changes')),
+                          if ((widget.preferences?.avoidClaustrophobic ?? false) == false &&
+                              (widget.preferences?.requireLift ?? false) == false &&
+                              (widget.preferences?.avoidStairs ?? false) == false &&
+                              (widget.preferences?.wheelchairAccessible ?? false) == false &&
+                              (widget.preferences?.avoidNoise ?? false) == false &&
+                              (widget.preferences?.avoidHeat ?? false) == false &&
+                              (widget.preferences?.preferBuses ?? false) == false &&
+                              (widget.preferences?.minimiseChanges ?? false) == false)
+                            const Chip(label: Text('None')),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          if (widget.onContinue != null) {
+                            await widget.onContinue!();
+                          }
+                          Navigator.of(context).pop();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: const Icon(Icons.check_circle_outline),
+                        label: const Text('Use selected route'),
+                      ),
+                    ],
+                  ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -1701,6 +1669,64 @@ class SearchResult {
       displayName: json['display_name'] as String,
       lat: double.parse(json['lat'] as String),
       lon: double.parse(json['lon'] as String),
+    );
+  }
+}
+
+class MapPickerPage extends StatefulWidget {
+  final LatLng initialLocation;
+  final bool isStart;
+  final List<Marker> existingMarkers;
+
+  const MapPickerPage({
+    super.key,
+    required this.initialLocation,
+    required this.isStart,
+    required this.existingMarkers,
+  });
+
+  @override
+  State<MapPickerPage> createState() => _MapPickerPageState();
+}
+
+class _MapPickerPageState extends State<MapPickerPage> {
+  late final MapController _pickerMapController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pickerMapController = MapController();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _pickerMapController.move(widget.initialLocation, 14);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.isStart ? 'Select Start on Map' : 'Select Destination on Map'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+      ),
+      body: FlutterMap(
+        mapController: _pickerMapController,
+        options: MapOptions(
+          initialCenter: widget.initialLocation,
+          initialZoom: 14,
+          onTap: (tapPosition, point) {
+            Navigator.of(context).pop(point);
+          },
+        ),
+        children: [
+          TileLayer(
+            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            userAgentPackageName: 'com.example.ui1',
+            maxNativeZoom: 19,
+            maxZoom: 19,
+          ),
+          MarkerLayer(markers: widget.existingMarkers),
+        ],
+      ),
     );
   }
 }

@@ -184,28 +184,49 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
           .map((point) => {'lat': point.latitude, 'lng': point.longitude})
           .toList();
       
-      // Calculate estimated journey duration based on walking speed (5 km/h average)
-      double totalDistance = 0;
-      for (int i = 0; i < selectedRoute.polyline.points.length - 1; i++) {
-        final p1 = selectedRoute.polyline.points[i];
-        final p2 = selectedRoute.polyline.points[i + 1];
-        final lat1 = p1.latitude * 0.017453292519943295; // to radians
-        final lat2 = p2.latitude * 0.017453292519943295;
-        final lon1 = p1.longitude * 0.017453292519943295;
-        final lon2 = p2.longitude * 0.017453292519943295;
+      // Extract steps from raw backend data
+      List<RouteStep>? routeSteps;
+      int? durationMinutes;
+      
+      if (selectedRoute.rawData != null) {
+        final rawData = selectedRoute.rawData!;
+        durationMinutes = rawData['duration_minutes'] as int?;
         
-        // Haversine formula
-        final dLat = lat2 - lat1;
-        final dLon = lon2 - lon1;
-        final a = sin(dLat / 2) * sin(dLat / 2) +
-            cos(lat1) * cos(lat2) *
-            sin(dLon / 2) * sin(dLon / 2);
-        final c = 2 * asin(sqrt(a));
-        totalDistance += 6371 * c; // Earth radius in km
+        final stepsData = rawData['steps'] as List<dynamic>? ?? [];
+        routeSteps = stepsData.map((stepJson) {
+          return RouteStep(
+            mode: stepJson['mode'] as String? ?? 'walking',
+            line: stepJson['line'] as String?,
+            fromStation: stepJson['from_station'] as String? ?? '',
+            toStation: stepJson['to_station'] as String? ?? '',
+            durationMinutes: stepJson['duration_minutes'] as int? ?? 0,
+            instructions: stepJson['instructions'] as String? ?? '',
+          );
+        }).toList();
       }
       
-      // Calculate duration: distance (km) / speed (5 km/h) * 60 = minutes
-      final durationMinutes = (totalDistance / 5 * 60).round();
+      // Fallback: Calculate duration if not from backend
+      if (durationMinutes == null) {
+        double totalDistance = 0;
+        for (int i = 0; i < selectedRoute.polyline.points.length - 1; i++) {
+          final p1 = selectedRoute.polyline.points[i];
+          final p2 = selectedRoute.polyline.points[i + 1];
+          final lat1 = p1.latitude * 0.017453292519943295; // to radians
+          final lat2 = p2.latitude * 0.017453292519943295;
+          final lon1 = p1.longitude * 0.017453292519943295;
+          final lon2 = p2.longitude * 0.017453292519943295;
+          
+          // Haversine formula
+          final dLat = lat2 - lat1;
+          final dLon = lon2 - lon1;
+          final a = sin(dLat / 2) * sin(dLat / 2) +
+              cos(lat1) * cos(lat2) *
+              sin(dLon / 2) * sin(dLon / 2);
+          final c = 2 * asin(sqrt(a));
+          totalDistance += 6371 * c; // Earth radius in km
+        }
+        durationMinutes = (totalDistance / 5 * 60).round();
+      }
       
       // Generate unique ID for the journey
       final journeyId = DateTime.now().millisecondsSinceEpoch.toString();
@@ -213,7 +234,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
       // Get a photo from the actual route location
       final imageUrl = await _getPhotoFromRoute();
       
-      // Create journey object with coordinates and route polyline
+      // Create journey object with coordinates, route polyline, and steps
       final journey = Journey(
         id: journeyId,
         date: _selectedDate,
@@ -226,6 +247,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
         polylinePoints: polylinePoints,
         imageUrl: imageUrl,
         durationMinutes: durationMinutes,
+        steps: routeSteps,
       );
       
       // Get existing journeys
@@ -234,7 +256,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
       // Add new journey
       final jsonStr = jsonEncode(journey.toJson());
       print('Saving journey JSON: $jsonStr');
-      print('Saving route with ${polylinePoints.length} waypoints');
+      print('Saving route with ${polylinePoints.length} waypoints and ${routeSteps?.length ?? 0} steps');
       journeysJson.add(jsonStr);
       
       // Save back to storage
@@ -992,6 +1014,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
         color: color,
         strokeWidth: 4,
       ),
+      rawData: routeData, // Store raw backend data
     );
   }
 
@@ -1614,10 +1637,12 @@ class Route {
   final String name;
   final String description;
   final Polyline polyline;
+  final Map<String, dynamic>? rawData; // Store raw backend data including steps
 
   Route({
     required this.name,
     required this.description,
     required this.polyline,
+    this.rawData,
   });
 }

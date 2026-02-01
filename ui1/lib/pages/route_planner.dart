@@ -946,7 +946,7 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
 
   Future<List<Route>> _fetchRoutesFromBackend(String fromPostcode, String toPostcode) async {
     try {
-      final url = Uri.parse('http://172.30.185.25:8000/route');
+      final url = Uri.parse('http://172.30.111.204:8000/route');
 
       print("Going from $fromPostcode to $toPostcode");
       

@@ -239,11 +239,11 @@ def apply_preference_adjustments(routes: List[Route], preferences: Dict) -> List
 
         if preferences.get("avoid_crowds"):
             hubs_in_route = route_stations & MAJOR_HUBS
-            r.overall_score += 20 if not hubs_in_route else -len(hubs_in_route) * 12
+            r.overall_score += 200 if not hubs_in_route else -len(hubs_in_route) * 12
 
         if preferences.get("prefer_buses"):
             has_bus = any("bus" in s.mode for s in r.steps)
-            r.overall_score += 30 if has_bus else -10
+            r.overall_score += 300 if has_bus else -10
 
         if preferences.get("minimise_changes"):
             if r.number_of_changes == 0:

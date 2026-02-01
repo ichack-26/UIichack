@@ -297,7 +297,7 @@ async def plan_route(request: RouteRequest):
         routes[0].recommended = True
         primary = routes[0]
         alternative=None
-        if (len(preferences_dict.values()==0)):
+        if not any(preferences_dict.values()):
             alternative = parse_tfl_journey(
                 journey_data["journeys"][0],
                 "route_fastest",

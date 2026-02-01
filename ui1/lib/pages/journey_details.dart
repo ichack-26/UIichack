@@ -6,6 +6,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:ui1/models/journey.dart';
 import 'package:intl/intl.dart';
+import 'package:ui1/services/advanced_navigation_service.dart';
+import 'package:ui1/services/routing_service.dart';
 
 class JourneyDetailsPage extends StatefulWidget {
   final Journey journey;
@@ -44,6 +46,13 @@ class _JourneyDetailsPageState extends State<JourneyDetailsPage> with SingleTick
     // Use the coordinates stored in the journey
     _startLocation = LatLng(widget.journey.fromLat, widget.journey.fromLng);
     _endLocation = LatLng(widget.journey.toLat, widget.journey.toLng);
+    
+    // Initialize navigation service
+    _navigationService = AdvancedNavigationService(
+      journey: widget.journey,
+      onStateChange: _handleNavStateChange,
+      onInstructionChange: _handleInstructionChange,
+    );
     
     // Center map between start and end points
     Future.delayed(const Duration(milliseconds: 500), () {
@@ -850,6 +859,76 @@ class _JourneyDetailsPageState extends State<JourneyDetailsPage> with SingleTick
             );
           }).toList(),
       ],
+    );
+  }
+
+  Widget _buildBottomPanel(String dateLabel, String timeLabel) {
+    final isNavigating = _navState == NavigationState.navigating;
+    
+    return Container(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (!isNavigating) ...[
+              Text(
+                'Journey Information',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Date: $dateLabel',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  Text(
+                    'Time: $timeLabel',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'From: ${widget.journey.from}',
+                style: const TextStyle(fontSize: 14),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'To: ${widget.journey.to}',
+                style: const TextStyle(fontSize: 14),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: _startNavigation,
+                icon: const Icon(Icons.navigation),
+                label: const Text('Start Live Navigation'),
+              ),
+            ] else ...[
+              ElevatedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _navigationService.stopNavigation();
+                  });
+                },
+                icon: const Icon(Icons.stop),
+                label: const Text('Stop Navigation'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 

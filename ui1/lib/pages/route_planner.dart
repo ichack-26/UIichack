@@ -290,17 +290,19 @@ class _RoutePlannerRouteState extends State<RoutePlannerRoute> {
       
       final gpsLocation = LatLng(position.latitude, position.longitude);
 
-      // Only use GPS location if it's within the UK bounds
-      if (_isUkLatLng(gpsLocation)) {
-        setState(() {
-          _userLocation = gpsLocation;
-          _updateMarkers();
+      // Always use GPS location as default start location
+      setState(() {
+        _userLocation = gpsLocation;
+        _fromLocation = gpsLocation;
+        _fromAddress = 'Your Location (${gpsLocation.latitude.toStringAsFixed(4)}, ${gpsLocation.longitude.toStringAsFixed(4)})';
+        _updateMarkers();
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
           _mapController.move(_userLocation, 14);
-        });
-        print('User location obtained: $_userLocation');
-      } else {
-        print('GPS location outside UK, keeping default UK location.');
-      }
+        }
+      });
+      print('User location obtained: $_userLocation');
     } catch (e) {
       print('Error getting user location: $e');
       // Will use default London location

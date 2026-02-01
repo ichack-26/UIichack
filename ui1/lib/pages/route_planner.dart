@@ -1473,173 +1473,177 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
               ),
             ],
           ),
-          Positioned.fill(
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: DraggableScrollableSheet(
-                initialChildSize: 0.35,
-                minChildSize: 0.2,
-                maxChildSize: 0.85,
-                builder: (context, scrollController) {
-                  return Material(
-                    elevation: 12,
-                    color: Theme.of(context).scaffoldBackgroundColor,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                    child: SingleChildScrollView(
-                      controller: scrollController,
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 8.0, left: 16, right: 16, bottom: 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Center(
-                              child: Container(
-                                width: 40,
-                                height: 4,
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[400],
-                                  borderRadius: BorderRadius.circular(2),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text('Suggested routes', style: Theme.of(context).textTheme.titleMedium),
-                                Text('${widget.routes.length} options', style: Theme.of(context).textTheme.bodySmall),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            ...widget.routes.asMap().entries.map((entry) {
-                              final index = entry.key;
-                              final route = entry.value;
-                              final isSelected = _selectedRouteIndex == index;
-                              final routeColor = route.polyline.color;
-
-                              return InkWell(
-                                onTap: () {
-                                  setState(() {
-                                    _selectedRouteIndex = index;
-                                  });
-                                  if (widget.onRouteSelected != null) {
-                                    widget.onRouteSelected!(index);
-                                  }
-                                },
-                                borderRadius: BorderRadius.circular(16),
-                                child: Container(
-                                  margin: const EdgeInsets.only(bottom: 10),
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: isSelected ? routeColor.withAlpha(26) : Colors.white,
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color: isSelected ? routeColor : Colors.grey.shade200,
-                                      width: isSelected ? 2 : 1,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.04),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Container(
-                                        width: 8,
-                                        height: 56,
-                                        decoration: BoxDecoration(
-                                          color: routeColor,
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
-                                              children: [
-                                                Expanded(
-                                                  child: Text(
-                                                    route.name,
-                                                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                                          fontWeight: FontWeight.w600,
-                                                        ),
-                                                  ),
-                                                ),
-                                                if (isSelected)
-                                                  Icon(Icons.check_circle, color: routeColor, size: 20),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              route.description,
-                                              style: Theme.of(context).textTheme.bodySmall,
-                                              maxLines: 3,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                            const SizedBox(height: 8),
-                            Text('Preferences used:', style: Theme.of(context).textTheme.bodyMedium),
-                            const SizedBox(height: 6),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 6,
-                              children: [
-                                if (widget.preferences?.avoidClaustrophobic ?? false) Chip(label: const Text('Avoid claustrophobic')),
-                                if (widget.preferences?.requireLift ?? false) Chip(label: const Text('Require lift')),
-                                if (widget.preferences?.avoidStairs ?? false) Chip(label: const Text('Avoid stairs')),
-                                if (widget.preferences?.wheelchairAccessible ?? false) Chip(label: const Text('Wheelchair only')),
-                                if (widget.preferences?.avoidNoise ?? false) Chip(label: const Text('Avoid noise')),
-                                if (widget.preferences?.avoidHeat ?? false) Chip(label: const Text('Avoid heat')),
-                                if (widget.preferences?.preferBuses ?? false) Chip(label: const Text('Prefer buses')),
-                                if (widget.preferences?.minimiseChanges ?? false) Chip(label: const Text('Minimise changes')),
-                                if ((widget.preferences?.avoidClaustrophobic ?? false) == false &&
-                                    (widget.preferences?.requireLift ?? false) == false &&
-                                    (widget.preferences?.avoidStairs ?? false) == false &&
-                                    (widget.preferences?.wheelchairAccessible ?? false) == false &&
-                                    (widget.preferences?.avoidNoise ?? false) == false &&
-                                    (widget.preferences?.avoidHeat ?? false) == false &&
-                                    (widget.preferences?.preferBuses ?? false) == false &&
-                                    (widget.preferences?.minimiseChanges ?? false) == false)
-                                  const Chip(label: Text('None')),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            ElevatedButton.icon(
-                              onPressed: () async {
-                                if (widget.onContinue != null) {
-                                  await widget.onContinue!();
-                                }
-                                Navigator.of(context).pop();
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blue,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              icon: const Icon(Icons.check_circle_outline),
-                              label: const Text('Use selected route'),
-                            ),
-                          ],
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 12,
+            child: SafeArea(
+              top: false,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.92),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: SizedBox(
+                    height: 300,
+                    child: ListView(
+                      padding: const EdgeInsets.only(top: 8.0, left: 16, right: 16, bottom: 16),
+                      children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[400],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Suggested routes', style: Theme.of(context).textTheme.titleMedium),
+                          Text('${widget.routes.length} options', style: Theme.of(context).textTheme.bodySmall),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      ...widget.routes.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final route = entry.value;
+                        final isSelected = _selectedRouteIndex == index;
+                        final routeColor = route.polyline.color;
+
+                        return InkWell(
+                          onTap: () {
+                            setState(() {
+                              _selectedRouteIndex = index;
+                            });
+                            if (widget.onRouteSelected != null) {
+                              widget.onRouteSelected!(index);
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: isSelected ? routeColor.withAlpha(26) : Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isSelected ? routeColor : Colors.grey.shade200,
+                                width: isSelected ? 2 : 1,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.04),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    color: routeColor,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              route.name,
+                                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                            ),
+                                          ),
+                                          if (isSelected)
+                                            Icon(Icons.check_circle, color: routeColor, size: 20),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        route.description,
+                                        style: Theme.of(context).textTheme.bodySmall,
+                                        maxLines: 3,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                      const SizedBox(height: 8),
+                      Text('Preferences used:', style: Theme.of(context).textTheme.bodyMedium),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [
+                          if (widget.preferences?.avoidClaustrophobic ?? false) Chip(label: const Text('Avoid claustrophobic')),
+                          if (widget.preferences?.requireLift ?? false) Chip(label: const Text('Require lift')),
+                          if (widget.preferences?.avoidStairs ?? false) Chip(label: const Text('Avoid stairs')),
+                          if (widget.preferences?.wheelchairAccessible ?? false) Chip(label: const Text('Wheelchair only')),
+                          if (widget.preferences?.avoidNoise ?? false) Chip(label: const Text('Avoid noise')),
+                          if (widget.preferences?.avoidHeat ?? false) Chip(label: const Text('Avoid heat')),
+                          if (widget.preferences?.preferBuses ?? false) Chip(label: const Text('Prefer buses')),
+                          if (widget.preferences?.minimiseChanges ?? false) Chip(label: const Text('Minimise changes')),
+                          if ((widget.preferences?.avoidClaustrophobic ?? false) == false &&
+                              (widget.preferences?.requireLift ?? false) == false &&
+                              (widget.preferences?.avoidStairs ?? false) == false &&
+                              (widget.preferences?.wheelchairAccessible ?? false) == false &&
+                              (widget.preferences?.avoidNoise ?? false) == false &&
+                              (widget.preferences?.avoidHeat ?? false) == false &&
+                              (widget.preferences?.preferBuses ?? false) == false &&
+                              (widget.preferences?.minimiseChanges ?? false) == false)
+                            const Chip(label: Text('None')),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          if (widget.onContinue != null) {
+                            await widget.onContinue!();
+                          }
+                          Navigator.of(context).pop();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: const Icon(Icons.check_circle_outline),
+                        label: const Text('Use selected route'),
+                      ),
+                    ],
+                  ),
+                  ),
+                ),
               ),
             ),
           ),
